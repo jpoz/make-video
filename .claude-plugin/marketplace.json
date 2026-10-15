@@ -1,0 +1,14 @@
+{
+  "name": "make-video",
+  "owner": {
+    "name": "jpoz"
+  },
+  "description": "The make-video skill: narrated films from a prompt, storyboard first.",
+  "plugins": [
+    {
+      "name": "make-video",
+      "source": "./",
+      "description": "Make narrated films from a prompt: storyboard with real voice and music first, then a polished 1080p render."
+    }
+  ]
+}

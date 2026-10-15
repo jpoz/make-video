@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ Storyboard</title>
+<style>
+:root {
+  --bg: #f6f4ee; --surface: #ebe7dc; --line: #d6d0c0; --fg: #14152b; --muted: #5b5d70; --accent: #c02a1c;
+  --f-body: "Atkinson Hyperlegible", -apple-system, "Segoe UI", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0d0f17; --surface: #171a26; --line: #2a2e40; --fg: #eeeaf0; --muted: #9a9cb3; --accent: #ff6a5c; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0d0f17; --surface: #171a26; --line: #2a2e40; --fg: #eeeaf0; --muted: #9a9cb3; --accent: #ff6a5c; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 48px 24px 96px; }
+@media (max-width: 520px) { .wrap { padding: 28px 16px 64px; } }
+.eyebrow { font: 500 12px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.05; margin: 12px 0 14px; text-wrap: balance; }
+.lede { max-width: 68ch; font-size: 18px; margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.meta span { font: 12px/1 var(--f-mono); border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; color: var(--muted); }
+.meta b { color: var(--fg); font-weight: 500; }
+.player { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 14px 0 12px; margin-top: 24px; border-bottom: 1px solid var(--line); }
+.player audio, .player video { width: 100%; display: block; }
+.player video { border-radius: 6px; background: #000; max-height: 56vh; }
+.bar { position: relative; display: flex; height: 30px; margin-top: 10px; border-radius: 4px; overflow: hidden; cursor: pointer; }
+.bar div { border-right: 1px solid var(--bg); background: var(--surface); font: 10px/30px var(--f-mono); color: var(--muted); padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bar div.card { background: var(--line); }
+.bar div.on { background: var(--accent); color: #fff; }
+.bar .now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); pointer-events: none; }
+section { margin-top: 56px; }
+h2 { font-size: 26px; margin: 0 0 12px; }
+ul.notes { max-width: 70ch; padding-left: 20px; margin: 0; }
+.scene { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 22px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.scene.on { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent); }
+@media (max-width: 760px) { .scene { grid-template-columns: 1fr; } }
+.scene img { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 6px; background: #000; }
+.shead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.shead .id { font: 600 15px var(--f-mono); }
+.shead .tc { font: 12px var(--f-mono); color: var(--muted); }
+.vo { margin: 10px 0 0; padding: 0; list-style: none; }
+.vo li { padding: 4px 0 4px 12px; border-left: 3px solid transparent; }
+.vo li.on { border-left-color: var(--accent); }
+.vo mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+.cardt { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.cues { margin-top: 8px; font: 12px/1.7 var(--f-mono); color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Storyboard · __STAGE__</div>
+    <h1 id="title"></h1>
+    <p class="lede" id="lede"></p>
+    <div class="meta" id="meta"></div>
+  </header>
+  <div class="player" id="player"></div>
+  <section id="approach" hidden><h2>Approach</h2><ul class="notes"></ul></section>
+  <section><h2>Scenes</h2><div id="scenes"></div></section>
+  <section id="questions" hidden><h2>Open questions</h2><ul class="notes"></ul></section>
+</div>
+<script>
+const D = __DATA__;
+const $ = s => document.querySelector(s);
+const fmt = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+$('#title').textContent = D.title;
+$('#lede').textContent = D.brief.lede || '';
+const lines = D.scenes.reduce((n, s) => n + s.lines.length, 0);
+$('#meta').innerHTML = [['Length', fmt(D.duration)], ['Scenes', D.scenes.length], ['Voice lines', lines], ['Voice', D.voice], ['Music', D.music]]
+  .map(([k, v]) => `<span>${k} <b>${esc(String(v))}</b></span>`).join('');
+for (const [id, items] of [['#approach', D.brief.approach], ['#questions', D.brief.questions]]) {
+  if (!items?.length) continue;
+  $(id).hidden = false;
+  $(id + ' ul').innerHTML = items.map(x => `<li>${esc(x)}</li>`).join('');
+}
+const media = document.createElement(D.video ? 'video' : 'audio');
+media.controls = true; media.preload = 'auto'; media.src = D.video || D.audio;
+if (D.video && D.poster) media.poster = D.poster;
+$('#player').append(media);
+const bar = document.createElement('div'); bar.className = 'bar';
+bar.innerHTML = D.scenes.map(s => `<div class="${s.card ? 'card' : ''}" style="flex:${s.end - s.start}" title="${esc(s.id)}">${esc(s.id)}</div>`).join('') + '<i class="now"></i>';
+$('#player').append(bar);
+bar.onclick = e => { const r = bar.getBoundingClientRect(); media.currentTime = (e.clientX - r.left) / r.width * D.duration; media.play(); };
+
+// mark each cue's word in its line
+function marked(text, cues) {
+  let out = esc(text);
+  for (const c of cues) out = out.replace(esc(c.at), m => `<mark title="${esc(c.label)}">${m}</mark>`);
+  return out;
+}
+$('#scenes').innerHTML = D.scenes.map((s, i) => `
+  <div class="scene" data-i="${i}">
+    <img src="${D.frames[s.id] || ''}" alt="Frame from scene ${esc(s.id)}" loading="lazy">
+    <div>
+      <div class="shead"><span class="id">${esc(s.id)}</span><span class="tc">${fmt(s.start)} – ${fmt(s.end)} · ${(s.end - s.start).toFixed(1)} s</span></div>
+      ${s.card ? `<div class="cardt">${esc([s.card.kicker, s.card.title].filter(Boolean).join(' · '))}</div>` : ''}
+      <ul class="vo">${s.lines.map(l => `<li data-a="${l.start}" data-b="${l.start + l.dur}">${marked(l.text, s.cueSpec)}</li>`).join('')}</ul>
+      ${s.cueSpec.length ? `<div class="cues">cues: ${s.cueSpec.map(c => `${esc(c.label)} @ ${fmt(s.cues[c.label])}${c.sound && c.sound !== 'none' ? ' ♪' + esc(c.sound) : ''}`).join(' · ')}</div>` : ''}
+    </div>
+  </div>`).join('');
+document.querySelectorAll('.scene').forEach(el => el.onclick = () => { media.currentTime = D.scenes[+el.dataset.i].start + 0.01; media.play(); });
+const now = bar.querySelector('.now'), rows = [...document.querySelectorAll('.scene')], segs = [...bar.children].slice(0, -1);
+let last = -1;
+function tick() {
+  const t = media.currentTime;
+  now.style.left = `${t / D.duration * 100}%`;
+  const i = D.scenes.findIndex(s => t >= s.start && t < s.end);
+  if (i !== last) {
+    rows.forEach((r, k) => r.classList.toggle('on', k === i)); segs.forEach((r, k) => r.classList.toggle('on', k === i));
+    if (i >= 0 && !media.paused) rows[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    last = i;
+  }
+  document.querySelectorAll('.vo li').forEach(li => li.classList.toggle('on', t >= +li.dataset.a && t < +li.dataset.b));
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>

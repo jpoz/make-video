@@ -1,0 +1,82 @@
+{
+  "name": "make-video-demo",
+  "title": "How make-video works",
+  "fps": 60,
+  "voice": "af_heart",
+  "speed": 1.0,
+  "lang": "en-us",
+  "captions": true,
+  "music": { "style": "pop", "bpm": 112, "snap": true },
+  "timing": { "gap": 0.35, "lead": 0.5, "tail": 0.8, "min": 4.0 },
+  "brief": {
+    "lede": "A 30-second sample film. It shows the parts every make-video project has: a title, a diagram, a real file on screen, and a close.",
+    "approach": [
+      "Every picture lands on the word that names it.",
+      "The code panel reads the real video.json, so it cannot misquote it."
+    ],
+    "questions": [
+      "Is the voice speed right, or should it be a little slower?"
+    ]
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "music": 1.0,
+      "lead": 0.8,
+      "min": 5.0,
+      "lines": [
+        { "text": "This is make-video.", "say": "This is make video." },
+        "It turns a short script into a narrated film."
+      ],
+      "cues": [
+        { "label": "title", "at": "make-video", "sound": "pop" },
+        { "label": "film", "at": "narrated film", "sound": "chime" }
+      ]
+    },
+    {
+      "id": "card-1",
+      "card": { "kicker": "Chapter 1", "title": "The pipeline" },
+      "music": 0.4,
+      "min": 3.0
+    },
+    {
+      "id": "pipeline",
+      "music": 0.7,
+      "lines": [
+        "You write the script. The voice is made from it.",
+        "The timeline puts every picture on the word that names it.",
+        "Then the music and the mix."
+      ],
+      "cues": [
+        { "label": "script", "at": "script", "sound": "chime" },
+        { "label": "voice", "at": "voice", "sound": "chime" },
+        { "label": "timeline", "at": "timeline", "sound": "chime" },
+        { "label": "music", "at": "music", "sound": "chime" },
+        { "label": "mix", "at": "mix", "sound": "chime" }
+      ]
+    },
+    {
+      "id": "code",
+      "music": 0.6,
+      "tail": 1.2,
+      "lines": [
+        { "text": "Each scene is a few lines in video.json.", "say": "Each scene is a few lines in video dot jason." },
+        "A cue ties a picture to one word of the voice."
+      ],
+      "cues": [
+        { "label": "cue", "at": "cue", "sound": "click" }
+      ]
+    },
+    {
+      "id": "outro",
+      "music": 1.0,
+      "min": 5.0,
+      "lines": [
+        "Storyboard first. Then the full film."
+      ],
+      "cues": [
+        { "label": "end", "at": "full film", "sound": "pop" }
+      ]
+    }
+  ]
+}
