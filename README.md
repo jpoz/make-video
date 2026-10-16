@@ -53,7 +53,8 @@ and `--force` to replace an existing skill named `make-video`.
 - [uv](https://docs.astral.sh/uv/) (it runs the Python steps and installs their dependencies)
 - Python 3.10–3.12, for the voice (uv can install one)
 
-The Kokoro voice model (about 115 MB) downloads once to `~/.cache/make-video/models`. Fonts are not
+The Kokoro voice model (about 115 MB) downloads once to `~/.cache/make-video/models` (manual
+install and URLs: `skills/make-video/references/audio.md`). Fonts are not
 included: `skills/make-video/references/fonts.md` says where to get them. Real app screenshots need
 Playwright (`npm i -D playwright` in the film project).
 

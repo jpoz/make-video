@@ -26,8 +26,9 @@ approves the storyboard. Sample real frames at every step and fix what you see b
 ## Requirements
 
 `node` 20+, `ffmpeg`, `uv` (it runs the Python scripts and installs their dependencies), and `python3`.
-`./make.sh setup` checks for them. The Kokoro model (~115 MB) downloads once, on the first voice
-run, to `~/.cache/make-video/models`. Fonts are not shipped: see `references/fonts.md`.
+`./make.sh setup` checks for them. The Kokoro voice model (~115 MB) downloads once, on the first voice
+run, to `~/.cache/make-video/models`. For the URLs, a manual install, and fixes for a failed download,
+see `references/audio.md`, "Voice model". Fonts are not shipped: see `references/fonts.md`.
 
 ## 1. Understand the film (from the prompt)
 
