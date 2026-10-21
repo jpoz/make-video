@@ -20,7 +20,7 @@ problem points straight to `--stills <t>` for a full-size look.
 
 Layout
 - No text overflows its box, and no text touches the frame edge (keep a 100 px margin).
-- Content stays above the caption band (y < 950) and below the chapter bar (y > 100).
+- Content stays within `SAFE`: below the chapter bar and above the caption band.
 - Things that should line up do: centers, baselines, equal gaps. The layout is measured, not guessed.
 - Text is large enough to read in a small player: labels 28 px or more, code 26 px or more.
 - Nothing overlaps unless it is meant to, and the cursor does not hide the thing it points at.
@@ -50,6 +50,8 @@ ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_
 ffmpeg -loglevel error -y -i out/<name>.mp4 -vf "fps=12/$(ffprobe -v error -show_entries format=duration -of csv=p=0 out/<name>.mp4),scale=640:360,tile=3x4" -frames:v 1 out/final-sheet.jpg
 ```
 
-Confirm that the duration matches `timeline.json`, that the video is 1920×1080 h264, and that the
-audio is AAC. Look at `out/final-sheet.jpg`. Watch at least the opening, one transition, and the
+Confirm that duration matches `timeline.json` within one frame. Check H.264 video and AAC audio.
+Compare dimensions and frame rate with `out/render.json`. Preserve aspect ratio in the frame sheet;
+for portrait or square output, use `scale=640:-2` instead of `scale=640:360` in the command above.
+Look at `out/final-sheet.jpg`. Watch at least the opening, one transition, and the
 ending of the MP4 with sound. Report any step that you skipped.

@@ -10,7 +10,7 @@
 If out/extra.wav exists (a demo's own sound, sound effects), it is mixed into the bed and ducks too.
 """
 
-import json
+import os
 import subprocess
 import sys
 import wave
@@ -18,11 +18,12 @@ from pathlib import Path
 
 import numpy as np
 from scipy.signal import resample_poly
+from validate import load_spec, check_timeline
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "out"
 SR = 48000
-tl = json.loads((ROOT / "timeline.json").read_text())
+tl = check_timeline(load_spec())
 NAME = tl["name"]
 n = int((tl["duration"] + 0.5) * SR)
 
@@ -39,6 +40,8 @@ def read(path):
 voice = np.zeros(n)
 for sc in tl["scenes"]:
     for ln in sc["lines"]:
+        if ln.get("file") is None:
+            continue
         x = read(ROOT / ln["file"])
         i = int(ln["start"] * SR)
         voice[i : i + len(x)] += x[: n - i]
@@ -51,16 +54,19 @@ with wave.open(str(OUT / "voice.wav"), "wb") as w:
 
 
 def ts(t, sep="."):
-    return f"{int(t // 3600):02d}:{int(t % 3600 // 60):02d}:{int(t % 60):02d}{sep}{int(round(t % 1 * 1000)) % 1000:03d}"
+    seconds, millis = divmod(round(t * 1000), 1000)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}{sep}{millis:03d}"
 
 
-caps = tl["captions"] or [{"a": ln["start"], "b": ln["start"] + ln["dur"], "text": ln["text"]} for sc in tl["scenes"] for ln in sc["lines"]]
+caps = tl["captions"]
 vtt, srt = ["WEBVTT", ""], []
 for k, c in enumerate(caps, 1):
     vtt += [f"{ts(c['a'])} --> {ts(c['b'])}", c["text"], ""]
     srt += [str(k), f"{ts(c['a'], ',')} --> {ts(c['b'], ',')}", c["text"], ""]
-(OUT / f"{NAME}.vtt").write_text("\n".join(vtt))
-(OUT / f"{NAME}.srt").write_text("\n".join(srt))
+(OUT / f"{NAME}.vtt").write_text("\n".join(vtt), encoding="utf-8")
+(OUT / f"{NAME}.srt").write_text("\n".join(srt), encoding="utf-8")
 
 ins = ["-i", str(OUT / "music.wav"), "-i", str(OUT / "voice.wav")]
 bed = "[0:a]aformat=channel_layouts=stereo[bed];"
@@ -73,14 +79,31 @@ fc = (
     "[m][v1]amix=inputs=2:normalize=0:weights='0.55 1'[mx];"
     "[mx]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[a]"
 )
+
+
+def has_signal(path):
+    """Avoid loudness normalization of digital silence, which has no finite loudness."""
+    with wave.open(str(path)) as source:
+        silence = 128 if source.getsampwidth() == 1 else 0
+        while block := source.readframes(48000):
+            if any(value != silence for value in block):
+                return True
+    return False
+
+
+if not voiced.any() and not has_signal(OUT / "music.wav") and not (OUT / "extra.wav").exists():
+    fc = "[0:a]aformat=channel_layouts=stereo,aresample=48000[a]"
 ff = ["ffmpeg", "-loglevel", "error", "-y", *ins]
 if "--audio" in sys.argv:
     subprocess.run([*ff, "-filter_complex", fc, "-map", "[a]", "-ac", "2", "-b:a", "128k", str(OUT / "audio-mix.mp3")], check=True)
     print("wrote out/audio-mix.mp3")
     sys.exit(0)
 vi = len(ins) // 2
+destination = OUT / f"{NAME}.mp4"
+partial = OUT / f"{NAME}.part.mp4"
 subprocess.run([
     *ff, "-i", str(OUT / "video.mp4"), "-filter_complex", fc, "-map", f"{vi}:v", "-map", "[a]", "-ac", "2",
-    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", str(OUT / f"{NAME}.mp4"),
+    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", str(partial),
 ], check=True)
+os.replace(partial, destination)
 print(f"wrote out/{NAME}.mp4, out/{NAME}.srt, out/{NAME}.vtt")

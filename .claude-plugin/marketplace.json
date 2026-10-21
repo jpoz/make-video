@@ -3,12 +3,12 @@
   "owner": {
     "name": "jpoz"
   },
-  "description": "The make-video skill: narrated films from a prompt, storyboard first.",
+  "description": "The make-video skill: local videos, optional narration, and a review storyboard.",
   "plugins": [
     {
       "name": "make-video",
       "source": "./",
-      "description": "Make narrated films from a prompt: storyboard with real voice and music first, then a polished 1080p render."
+      "description": "Create local videos for lessons, announcements, diagrams, and walkthroughs, with a review storyboard and optional narration."
     }
   ]
 }

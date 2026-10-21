@@ -1,0 +1,22 @@
+{
+  "name": "art-workshop",
+  "title": "Example event announcement",
+  "fps": 30,
+  "output": { "format": "portrait", "quality": "final", "workers": 2 },
+  "narration": { "mode": "none" },
+  "music": { "style": "pop", "snap": false },
+  "brief": { "lede": "A fictional event. Replace the time and place before use.", "approach": ["Use a portrait frame and no narration."], "questions": [] },
+  "scenes": [
+    {
+      "id": "event",
+      "min": 9,
+      "visual": { "title": "Make something together", "items": ["Community art workshop", "Saturday · 10:00 AM", "Community hall", "All skill levels welcome"] },
+      "cues": [
+        { "label": "step-1", "time": 0.8, "sound": "pop" },
+        { "label": "step-2", "time": 2, "sound": "chime" },
+        { "label": "step-3", "time": 3.2, "sound": "chime" },
+        { "label": "step-4", "time": 4.4, "sound": "chime" }
+      ]
+    }
+  ]
+}

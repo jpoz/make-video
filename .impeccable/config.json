@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "hero-eyebrow-chip",
+        "value": "*",
+        "files": [
+          "skills/make-video/template/storyboard.template.html"
+        ],
+        "createdAt": "2026-10-21T21:47:54.836Z",
+        "reason": "Agent decision: the existing Storyboard label identifies the review document and its draft or final-cut status. git show HEAD confirms this label predates the current changes; storyboard.py supplies the status. Preserve this functional review label."
+      }
+    ]
+  }
+}

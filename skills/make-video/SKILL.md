@@ -1,141 +1,126 @@
 ---
 name: make-video
 description: >-
-  Make a short narrated film (an explainer, a product intro, a feature announcement, a walkthrough
-  of code or a design) from a prompt. Every frame is drawn in code on a canvas, with a local AI voice
-  (Kokoro), a score made in code, word-timed cues, burned-in captions, and .srt/.vtt files. The flow:
-  prompt, then a storyboard page with the real voice and music that the user iterates on, then the
-  full 1080p render. Real frames are sampled and checked at every step. Use when the user asks
-  to "make a video", "make an intro/explainer/announcement video", "a narrated walkthrough of this
-  PR/feature/repo", "turn this into a video", or wants to change the storyboard, script, voice,
-  music or look of a film made this way.
+  Create or revise short videos from a prompt, source material, or an existing make-video
+  project. Use for explainers, lessons, announcements, narrated diagrams, and app or code
+  walkthroughs. Produces a review storyboard, an MP4, and caption files with local rendering.
 ---
 
 # make-video
 
-Make a narrated film from a prompt. Every frame is a pure function of time `t`, drawn on a canvas
-(`@napi-rs/canvas`) and encoded with ffmpeg. The voice is generated locally with Kokoro. The music
-is synthesized in Python. Every picture is timed to the word in the voice that names it.
+Create a video with scenes drawn on a canvas and encoded by ffmpeg. Use local Kokoro speech,
+a supplied recording, or no narration. Music is optional. Projects contain their own source files.
 
-**The flow is fixed:** prompt → **storyboard** (real voice, real music, one real frame per scene) →
-the user iterates on the storyboard → **full render**. Do not render the full film before the user
-approves the storyboard. Sample real frames at every step and fix what you see before you show it.
+Use a storyboard for review by default. If the user has already approved the content, or asks
+for automatic completion, continue through the final render without another approval step.
+Keep the user's requested subject, style, length, and output format.
 
-`<skill>` below means the folder that holds this SKILL.md.
+`<skill>` means the folder that contains this file. Quote paths that contain spaces.
 
-## Requirements
+## 1. Establish the brief
 
-`node` 20+, `ffmpeg`, `uv` (it runs the Python scripts and installs their dependencies), and `python3`.
-`./make.sh setup` checks for them. The Kokoro voice model (~115 MB) downloads once, on the first voice
-run, to `~/.cache/make-video/models`. For the URLs, a manual install, and fixes for a failed download,
-see `references/audio.md`, "Voice model". Fonts are not shipped: see `references/fonts.md`.
+Read the supplied material before writing the script. Find real screens, code, images, or output
+that can support the video. Ask only for information that materially affects the result and is
+not available from the source material.
 
-## 1. Understand the film (from the prompt)
+Choose reasonable defaults for missing preferences:
 
-Read what the film is about before you write a line: the PR, the repo, the docs, the app, the
-announcement. Find the real things the film can show: real screens, real code, real output.
-Decide these, and ask the user only about what you cannot find out yourself:
+- Audience, purpose, and the main point to remember.
+- Length: 30–75 seconds for an announcement; 2–6 minutes for a longer explanation.
+- Format: landscape, portrait, or square. Use landscape if no destination is given.
+- Narration: local speech (`tts`), supplied audio (`recorded`), or `none`.
+- Look: the supplied brand, or a palette from `theme.mjs`.
+- Music: `pop`, `chip`, or `none`.
 
-- **Kind and length.** Feature intro or announcement: 30–75 s, 6–10 scenes, real app screens.
-  Explainer: 2–6 min, chapters with title cards, diagrams and code. Rule of thumb: 2.5 words of voice per second.
-- **Audience and the one thing** they must know or do at the end.
-- **Look.** The `ink` palette (near-black, red accent) or `navy` (deep blue, sky and amber) in
-  `theme.mjs`, or the product's own colors and fonts.
-- **Music style.** `pop` (bright, upbeat) or `chip` (quiet chiptune), or `none`.
+These are starting points. Lessons do not need a sales message, and announcements do not need
+chapters. See [references/examples.md](references/examples.md) for examples outside software.
 
-## 2. Make the project
+## 2. Create or open the project
+
+For a new project, choose a folder in the user's workspace:
 
 ```sh
-<skill>/scripts/new-project.sh ~/Developer/<topic>-video <topic>-video
+"<skill>/scripts/new-project.sh" ./my-video
+cd ./my-video
 ```
 
-This copies `<skill>/template` (a working 30 s sample film) and runs `npm install`. Get the fonts
-(`references/fonts.md`). The project is self-contained. Edit these files:
+This copies the template, checks tools, installs the locked Node packages, and downloads the
+default fonts with their license files. Requirements: Node.js 20+, npm, ffmpeg with ffprobe,
+Python 3.10+, and uv. Local speech uses Python 3.10–3.12 through uv. The speech model downloads
+on the first TTS run. See [references/audio.md](references/audio.md) for offline setup.
 
-| File | What it is |
-|---|---|
-| `video.json` | The script: scenes, voice lines, cues, timing, music, the brief for the storyboard |
-| `scenes/*.mjs` | One draw function per scene id |
-| `theme.mjs` | Palette, fonts, background |
-| `music.py` | The score (chords, hooks, instruments), when the defaults do not fit |
-| `shots/plan.mjs` | Real app screenshots to capture, when the film shows an app |
+Use `./make.sh doctor` for setup problems. Reuse an existing project when revising a video.
+Do not replace its scenes or configuration with the sample template.
 
-Do not edit `timeline.json`. `timeline.py` generates it.
+Edit `video.json` for the script, format, narration, and music. Edit `scenes/*.mjs` for pictures,
+and `theme.mjs` for colors and fonts. Do not edit generated `timeline.json`.
 
-## 3. Write the script (`video.json`)
+## 3. Build the script and scenes
 
-Read `references/script.md` first. In short: one idea per scene, short plain sentences, open with a
-hook, and end with what to do next. A line is a string, or `{"text", "say"}` when the caption and the
-spoken form differ (`"video.json"` is said `"video dot jason"`). A **cue** names the word that a
-picture lands on: `{"label": "badge", "at": "badge", "sound": "chime"}`. Put a cue on every
-important arrival. Fill in `brief` (lede, approach, open questions); the storyboard shows it.
+Read [references/script.md](references/script.md) for the configuration and cue format.
+Read [references/drawing.md](references/drawing.md) when drawing scenes.
 
-## 4. Draw the scenes (`scenes/*.mjs`)
+Each scene receives `(ctx, t, S)`. Draw deterministically: workers can render frames out of order.
+Use `W`, `H`, and `SAFE` for layout. Portrait and square frames need their own arrangement;
+changing output dimensions does not reflow custom scene code automatically.
 
-Read `references/drawing.md` (the scene API, helpers, layout and motion rules). Each scene gets
-`(ctx, t, S)`. Put each arrival on `S.cue(label)` or `S.w('word')`, and make each element leave by
-`S.tout`. Use real material:
-- **App screens:** capture the real UI with `shots/capture.mjs` and show it with `screens.mjs`
-  (camera, cursor, rings). See `references/screens.md`.
-- **Code:** `code.mjs` reads the real file by line number, so a quote cannot be wrong.
-- **Program output:** run the real program and draw its real output. Do not draw output you have not seen.
+Use cues to place important changes near the words that describe them. Word-based cues are
+estimates from text positions, not measured speech timestamps. Check critical timing with sound.
+For exact placement, use a scene-relative `time` cue or adjust `offset` after listening.
 
-**Sample while you draw.** After each scene, run `./make.sh scene <id>` and look at `out/sheet.jpg`
-before you go to the next scene. For each tricky move or transition, run `./make.sh clip A B` and
-watch `out/clip.mp4`. `references/review.md` has the checklist.
+Read conditional references only when needed:
 
-## 5. The storyboard: the user iterates here
+- Real app screens: [references/screens.md](references/screens.md).
+- Voices, recordings, and music: [references/audio.md](references/audio.md).
+- Custom fonts: [references/fonts.md](references/fonts.md).
+
+Use real source material when the video makes claims about it. `code.mjs` reads file contents;
+check that the chosen lines support the explanation. Run a program before showing its output.
+
+Run `./make.sh validate` before a long build. During drawing, use `./make.sh scene ID` and inspect
+`out/sheet.jpg`. These commands build missing or stale audio and timing data. Use `./make.sh clip A B`
+for transitions and precise timing. See [references/review.md](references/review.md).
+
+## 4. Review the storyboard
 
 ```sh
 ./make.sh storyboard
 ```
 
-This runs voice → timeline → music → audio mix → one frame per scene → `storyboard.html`: a
-self-contained page with the real voice-and-music mix, a frame of every scene, the script with each
-cue word marked, the timecodes, and the brief. Playing it highlights the current scene and line.
+This creates `storyboard.html` with the real audio mix, one frame per scene, the script, cue
+markers, and the brief. Inspect every frame in `out/board/` before sharing the page.
+Share a local file or a private artifact supported by the environment. Publish externally only
+when the user requests it.
 
-Before you show it, look at every frame in `out/board/` and fix what is wrong. Then give the
-user the page. If your harness can publish an HTML page or an artifact, publish
-`storyboard.html` and share the link. If not, give the file path to open in a browser.
+When review is requested, apply feedback and rebuild. Only changed speech lines are generated
+again. Keep `brief.questions` limited to unanswered questions. If the user has authorized automatic
+completion, use the storyboard for your own checks and continue.
 
-Then iterate with the user. Each change is small and fast: edit a line in `video.json` (only the
-changed lines are voiced again), move a cue, change a scene's energy, restyle, redraw a scene. Then
-run `./make.sh storyboard` again. Keep the brief's open questions up to date. Stay in this loop
-until the user approves the storyboard.
-
-## 6. The full render
-
-Only after the user approves:
+## 5. Render and deliver
 
 ```sh
-./make.sh film            # or: ./make.sh film --blur 4   (motion blur, ~4x slower)
+./make.sh preview                  # half-size output, at most 30 fps
+./make.sh film --quality final     # full size at the configured fps
 ```
 
-This writes `out/<name>.mp4` (1920×1080, 60 fps, AAC, loudness −16 LUFS), `out/<name>.srt`, and
-`out/<name>.vtt`. Then check the real output, not the code (see `references/review.md`, "Final check"):
-pull frames from the encoded MP4, confirm the duration and the streams, and listen to the mix at
-the points that changed. Run `python3 storyboard.py --final` to make the storyboard page hold the
-finished film. Deliver the MP4, the captions, and the storyboard. If the film is an announcement,
-offer a short post to go with it, written from the same script.
+Both commands write `out/<name>.mp4`, `.srt`, and `.vtt`; the later render replaces the earlier one.
+`out/render.json` records the actual dimensions, frame rate, and duration. Use `--workers N` to
+limit parallel work. Optional `--blur N` adds motion blur and increases render time.
+
+Check the encoded video: streams, duration, sample frames, and audio at important transitions.
+Then run `python3 storyboard.py --final` to embed the film in the review page. Deliver the MP4,
+caption files, and storyboard. State any checks that the available tools could not perform.
 
 ## Commands
 
-| Command | Does |
+| Command | Result |
 |---|---|
-| `./make.sh storyboard` | Voice, timeline, music, mix, board frames, storyboard.html |
-| `./make.sh scene ID [0.3,0.6,0.9]` | Stills at fractions of one scene, plus `out/sheet.jpg` |
-| `./make.sh samples [24]` | Stills spread over the whole film, plus `out/sheet.jpg` |
-| `./make.sh stills 3,20.5` | Stills at exact seconds, plus `out/sheet.jpg` |
-| `./make.sh clip A B` | `out/clip.mp4`: seconds A to B of the real film, with sound |
-| `./make.sh voice` / `music` / `timeline` | One step only |
-| `./make.sh film [--blur N]` | The full render and mix |
-| `uv run tts.py --voices` | List the Kokoro voices |
-
-## References
-
-- `references/script.md`: how to write the voice-over, and all of `video.json`
-- `references/drawing.md`: the scene API, the `lib.mjs` helpers, layout, motion, scene patterns
-- `references/screens.md`: capturing real app screens and moving a camera over them
-- `references/audio.md`: voices, music styles, cue sounds, the mix, extra audio
-- `references/review.md`: how to sample, the polish checklist, the final check
-- `references/fonts.md`: where to get fonts
+| `./make.sh setup` / `doctor` / `fonts` | Install dependencies, check setup, or fetch fonts |
+| `./make.sh validate` | Check script inputs and scene functions |
+| `./make.sh storyboard` | Audio, timeline, board frames, and storyboard page |
+| `./make.sh scene ID [0.3,0.6,0.9]` | Scene stills and a contact sheet |
+| `./make.sh samples [24]` / `stills 3,20.5` | Sample frames and a contact sheet |
+| `./make.sh clip A B` | A short video with audio |
+| `./make.sh voice` / `timeline` / `music` | Rebuild one pipeline stage |
+| `./make.sh preview` / `film` | Render the video and mix its audio |
+| `uv run tts.py --voices` | List local speech voices |

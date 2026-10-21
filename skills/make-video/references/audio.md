@@ -1,5 +1,36 @@
 # Audio: voice, music, mix
 
+## Choose the narration mode
+
+Set `narration.mode` in `video.json` to `tts` (the default), `recorded`, or `none`.
+Recorded and silent builds use the system Python for the narration step. They do not install or
+load Kokoro. Music and mixing still use uv for their Python dependencies.
+
+For recorded speech, add an audio path to every line:
+
+```json
+{
+  "narration": { "mode": "recorded" },
+  "scenes": [{
+    "id": "intro",
+    "lines": [
+      { "text": "Welcome to the workshop.", "audio": "audio/narration.wav", "from": 0, "to": 2.4 },
+      { "text": "We will start with a simple drawing.", "audio": "audio/narration.wav", "from": 2.4, "to": 6 }
+    ]
+  }]
+}
+```
+
+This is a partial configuration. Keep the project's other settings and its draw function for
+`intro`. Paths are relative to the project. Omit `from` and `to` to use a complete file for one
+line. ffmpeg converts each selected range to a cached mono WAV. The original file is preserved.
+The normal scene lead, line gaps, and tail still apply; set gaps to zero for adjoining ranges.
+The text is the supplied transcript. Word cues are estimates, including for recordings.
+
+For no narration, use `{"narration": {"mode": "none"}}`. Lines become timed captions; use
+`{"text": "Doors open at ten.", "duration": 3}` to set the display time. A scene can also have
+no lines, a `min` duration, and cues with explicit scene-relative `time` values.
+
 ## Voice model: download and install
 
 The voice is [Kokoro](https://github.com/thewh1teagle/kokoro-onnx), which runs locally on the CPU.
@@ -55,7 +86,7 @@ Each voice is cached on its own, so switching back is instant.
 
 ## Music (`music.py`)
 
-The score is generated in code, so there are no samples and no licences. The defaults:
+The included score is synthesized in code and needs no external audio samples. The defaults:
 
 - **`pop`**: F major, I–V–vi–IV, 112 BPM. It has off-beat piano stabs, a
   marimba hook, a bouncy bass, kick, clap, hats, and a glockenspiel on cues.

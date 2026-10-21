@@ -1,26 +1,21 @@
 # Fonts
 
-The skill ships no font files. Put them in the project's `fonts/` folder. `theme.mjs` registers
-every `.ttf` or `.otf` file there under the family name inside the file. If the folder is empty,
-the film renders with system fonts and `theme.mjs` prints a warning. Do not render a film for
-review in that state: the type will not match the storyboard.
+`./make.sh setup` downloads the default fonts and their license files into `fonts/`. To repeat
+only that step, use `./make.sh fonts`. Downloads use fixed upstream revisions in `doctor.py`.
+The default theme stops with a clear error if either required family cannot load.
+
+For an offline project, copy the `fonts/` folder from a prepared project, including both OFL
+license files. `theme.mjs` registers every `.ttf` or `.otf` file under its embedded family name.
 
 ## The default pair
 
 `theme.mjs` uses **Atkinson Hyperlegible** (body and titles) and **JetBrains Mono** (code, labels,
 and the fallback for arrows and symbols such as → ↔ ✓ ⋯). Both use the SIL Open Font License.
-Get the full font files, not web subsets, so that the symbols are there:
+Setup fetches full font files, not web subsets, so symbols are present. For a manual download,
+use the URLs listed in `doctor.py`, or run its standard-library installer:
 
 ```sh
-mkdir -p fonts && cd fonts
-G=https://raw.githubusercontent.com/google/fonts/main/ofl/atkinsonhyperlegible
-curl -fsSLO $G/AtkinsonHyperlegible-Regular.ttf
-curl -fsSLO $G/AtkinsonHyperlegible-Bold.ttf
-curl -fsSLO $G/AtkinsonHyperlegible-Italic.ttf
-J=https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/fonts/ttf
-curl -fsSLO $J/JetBrainsMono-Regular.ttf
-curl -fsSLO $J/JetBrainsMono-Medium.ttf
-curl -fsSLO $J/JetBrainsMono-Bold.ttf
+python3 doctor.py --install-fonts
 ```
 
 ## Other families
@@ -39,6 +34,7 @@ curl -fsSLO $J/JetBrainsMono-Bold.ttf
 - **System fonts:** on macOS, `/System/Library/Fonts` and `/Library/Fonts` hold fonts such as
   Avenir Next and Menlo. Do not copy them into a project you share.
 
-After you add a family, change `SANS`, `MONO` or `DISPLAY` in `theme.mjs`. Then run
+After you add a family, change `SANS`, `MONO` or `DISPLAY` and the required-family check in
+`theme.mjs`. Keep the font's license with the files. Then run
 `./make.sh samples 6` and look at the sheet to make sure the new face is in use. A silent fallback
 looks like Helvetica or Arial.

@@ -2,8 +2,9 @@
   "name": "make-video-project",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=20" },
   "description": "A make-video film: video.json is the script, scenes/*.mjs draw the picture.",
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.100"
+    "@napi-rs/canvas": "0.1.100"
   }
 }

@@ -53,7 +53,7 @@ export default {
 };
 ```
 
-- **Camera.** Zoom 1.06 (`WIDE`) shows the whole window. Use 1.8–2.6 for one control, and about 1.5
+- **Camera.** `WIDE` fits the whole window to the current video format. Use a higher zoom for one control, and about 1.5
   for a dialog or a panel. A camera key is the time the move **ends**, so start the push before the
   word. Hold wide for about 1 s while the window enters. Frame the whole area that changes, not only the
   control you click, so the change is not cropped. Keep the camera keys in time order: if the first

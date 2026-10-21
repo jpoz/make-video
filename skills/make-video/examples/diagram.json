@@ -1,0 +1,23 @@
+{
+  "name": "garden-plan",
+  "title": "A narrated planning diagram",
+  "fps": 30,
+  "output": { "format": "square", "quality": "final", "workers": 2 },
+  "narration": { "mode": "tts" },
+  "voice": "af_heart",
+  "music": { "style": "chip", "snap": false },
+  "brief": { "lede": "A simple diagram for a community garden meeting.", "approach": ["Show the plan as three connected steps."], "questions": [] },
+  "scenes": [
+    {
+      "id": "diagram",
+      "tail": 2,
+      "visual": { "title": "Plan a community garden", "items": ["Choose a site", "Draw the plan", "Share the work"] },
+      "lines": ["First, choose a site for the garden.", "Next, draw the plan with the group.", "Then, share the work and agree on the next steps."],
+      "cues": [
+        { "label": "step-1", "at": "choose a site", "sound": "chime" },
+        { "label": "step-2", "at": "draw the plan", "sound": "chime" },
+        { "label": "step-3", "at": "share the work", "sound": "chime" }
+      ]
+    }
+  ]
+}

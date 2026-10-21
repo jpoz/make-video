@@ -1,7 +1,7 @@
 // Drawing helpers. Every helper is a pure function of time t: it takes the times an element
 // arrives (tin) and leaves (tout), so any frame can be drawn on its own, in any order.
 import { C, SANS, MONO } from './theme.mjs';
-export { W, H, C, SANS, MONO, DISPLAY } from './theme.mjs';
+export { W, H, SAFE, C, SANS, MONO, DISPLAY } from './theme.mjs';
 export const PI = Math.PI;
 
 // ---------- timing ----------

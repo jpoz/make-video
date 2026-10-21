@@ -38,7 +38,7 @@ ul.notes { max-width: 70ch; padding-left: 20px; margin: 0; }
 .scene { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 22px 0; border-top: 1px solid var(--line); cursor: pointer; }
 .scene.on { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent); }
 @media (max-width: 760px) { .scene { grid-template-columns: 1fr; } }
-.scene img { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 6px; background: #000; }
+.scene img { width: 100%; max-height: 65vh; object-fit: contain; display: block; border-radius: 6px; background: #000; }
 .shead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .shead .id { font: 600 15px var(--f-mono); }
 .shead .tc { font: 12px var(--f-mono); color: var(--muted); }
@@ -88,10 +88,26 @@ $('#player').append(bar);
 bar.onclick = e => { const r = bar.getBoundingClientRect(); media.currentTime = (e.clientX - r.left) / r.width * D.duration; media.play(); };
 
 // mark each cue's word in its line
-function marked(text, cues) {
-  let out = esc(text);
-  for (const c of cues) out = out.replace(esc(c.at), m => `<mark title="${esc(c.label)}">${m}</mark>`);
-  return out;
+function marked(text, cues, previous) {
+  const ranges = [];
+  for (const c of cues) {
+    if (typeof c.at !== 'string' || !c.at.length) continue;
+    let remaining = c.nth ?? 0;
+    for (const line of previous) {
+      for (let i = line.indexOf(c.at); i >= 0; i = line.indexOf(c.at, i + 1)) remaining--;
+    }
+    for (let i = text.indexOf(c.at); i >= 0; i = text.indexOf(c.at, i + 1)) {
+      if (remaining-- === 0) ranges.push({ start: i, end: i + c.at.length, label: c.label });
+    }
+  }
+  ranges.sort((a, b) => a.start - b.start);
+  let out = '', cursor = 0;
+  for (const range of ranges) {
+    if (range.start < cursor) continue;
+    out += esc(text.slice(cursor, range.start)) + `<mark title="${esc(range.label)}">${esc(text.slice(range.start, range.end))}</mark>`;
+    cursor = range.end;
+  }
+  return out + esc(text.slice(cursor));
 }
 $('#scenes').innerHTML = D.scenes.map((s, i) => `
   <div class="scene" data-i="${i}">
@@ -99,7 +115,7 @@ $('#scenes').innerHTML = D.scenes.map((s, i) => `
     <div>
       <div class="shead"><span class="id">${esc(s.id)}</span><span class="tc">${fmt(s.start)} – ${fmt(s.end)} · ${(s.end - s.start).toFixed(1)} s</span></div>
       ${s.card ? `<div class="cardt">${esc([s.card.kicker, s.card.title].filter(Boolean).join(' · '))}</div>` : ''}
-      <ul class="vo">${s.lines.map(l => `<li data-a="${l.start}" data-b="${l.start + l.dur}">${marked(l.text, s.cueSpec)}</li>`).join('')}</ul>
+      <ul class="vo">${s.lines.map((l, j) => `<li data-a="${l.start}" data-b="${l.start + l.dur}">${marked(l.text, s.cueSpec, s.lines.slice(0, j).map(line => line.text))}</li>`).join('')}</ul>
       ${s.cueSpec.length ? `<div class="cues">cues: ${s.cueSpec.map(c => `${esc(c.label)} @ ${fmt(s.cues[c.label])}${c.sound && c.sound !== 'none' ? ' ♪' + esc(c.sound) : ''}`).join(' · ')}</div>` : ''}
     </div>
   </div>`).join('');

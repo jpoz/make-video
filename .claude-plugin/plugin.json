@@ -1,7 +1,7 @@
 {
   "name": "make-video",
-  "description": "Make narrated films from a prompt: storyboard with real voice and music first, then a polished 1080p render.",
-  "version": "0.1.0",
+  "description": "Create local videos for lessons, announcements, diagrams, and walkthroughs, with a review storyboard and optional narration.",
+  "version": "0.2.0",
   "author": { "name": "jpoz" },
   "homepage": "https://github.com/jpoz/make-video",
   "repository": "https://github.com/jpoz/make-video",

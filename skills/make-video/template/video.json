@@ -2,6 +2,8 @@
   "name": "make-video-demo",
   "title": "How make-video works",
   "fps": 60,
+  "output": { "format": "landscape", "quality": "final", "workers": 2 },
+  "narration": { "mode": "tts" },
   "voice": "af_heart",
   "speed": 1.0,
   "lang": "en-us",
@@ -11,7 +13,7 @@
   "brief": {
     "lede": "A 30-second sample film. It shows the parts every make-video project has: a title, a diagram, a real file on screen, and a close.",
     "approach": [
-      "Every picture lands on the word that names it.",
+      "Cues place each picture near the words that describe it.",
       "The code panel reads the real video.json, so it cannot misquote it."
     ],
     "questions": [
@@ -44,7 +46,7 @@
       "music": 0.7,
       "lines": [
         "You write the script. The voice is made from it.",
-        "The timeline puts every picture on the word that names it.",
+        "The timeline puts each picture near the words that describe it.",
         "Then the music and the mix."
       ],
       "cues": [

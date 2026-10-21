@@ -3,3 +3,6 @@ out/
 shots/out/
 storyboard.html
 .DS_Store
+__pycache__/
+*.pyc
+fonts/*.part

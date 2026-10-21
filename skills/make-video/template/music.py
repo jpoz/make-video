@@ -2,7 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["numpy", "scipy"]
 # ///
-"""The score, made entirely in code (no samples, no licences). Reads timeline.json, writes out/music.wav.
+"""The score, synthesized in code without external samples. Reads timeline.json, writes out/music.wav.
 
 Styles (video.json "music.style"):
   pop   bright groove: off-beat piano stabs, marimba hook, bouncy bass, kick, clap, hats; glockenspiel on cues
@@ -17,18 +17,18 @@ This file is a starting point: change the chords, hooks and instruments to fit t
 Run: uv run music.py
 """
 
-import json
 import wave
 from pathlib import Path
 
 import numpy as np
 from scipy.signal import butter, fftconvolve, sosfilt
+from validate import load_spec, check_timeline
 
 SR = 48000
 ROOT = Path(__file__).parent
 rng = np.random.default_rng(23)
-TL = json.loads((ROOT / "timeline.json").read_text())
-SPEC = json.loads((ROOT / "video.json").read_text())
+SPEC = load_spec()
+TL = check_timeline(SPEC)
 STYLE = SPEC.get("music", {}).get("style", "pop")
 DUR = TL["duration"]
 BEAT = 60.0 / TL["bpm"]
@@ -291,7 +291,8 @@ def main():
         mix *= 10 ** ((-24 if STYLE == "chip" else -19) / 20) / max(rms, 1e-9)
         mix *= min(1.0, 0.89 / max(np.max(np.abs(mix)), 1e-9))
     mix = mix[:, : int(DUR * SR)]
-    mix[:, -int(1.5 * SR):] *= np.linspace(1, 0, int(1.5 * SR)) ** 2
+    fade = min(mix.shape[1], int(1.5 * SR))
+    mix[:, -fade:] *= np.linspace(1, 0, fade) ** 2
     (ROOT / "out").mkdir(exist_ok=True)
     with wave.open(str(ROOT / "out/music.wav"), "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)

@@ -1,0 +1,23 @@
+{
+  "name": "water-cycle",
+  "title": "A short lesson: the water cycle",
+  "fps": 30,
+  "output": { "format": "landscape", "quality": "final", "workers": 2 },
+  "narration": { "mode": "tts" },
+  "voice": "af_heart",
+  "music": { "style": "chip", "snap": false },
+  "brief": { "lede": "A short classroom example. Follow three steps in the water cycle.", "approach": ["Show one step at a time."], "questions": [] },
+  "scenes": [
+    {
+      "id": "lesson",
+      "tail": 2,
+      "visual": { "title": "Where does the rain go?", "items": ["Water evaporates", "Clouds form", "Rain falls"] },
+      "lines": ["The sun warms water, and some water evaporates into the air.", "As the air cools, water vapor forms tiny drops. These drops form clouds.", "When the drops grow large enough, rain falls to the ground. The cycle continues."],
+      "cues": [
+        { "label": "step-1", "at": "evaporates", "sound": "chime" },
+        { "label": "step-2", "at": "clouds", "sound": "chime" },
+        { "label": "step-3", "at": "rain falls", "sound": "chime" }
+      ]
+    }
+  ]
+}

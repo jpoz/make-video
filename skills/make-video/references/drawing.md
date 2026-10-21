@@ -17,14 +17,19 @@ one module per chapter (`10-open.mjs`, `20-spec.mjs`, ...). Share helpers with p
 | `S.line(i)`, `S.lineEnd(i)`, `S.voiceEnd` | The voice line times |
 | `S.p(t)` | Progress through the scene, from 0 to 1 |
 
-The frame is 1920×1080. `render.mjs` draws the background, then the scene, then the chapter
-bar (y < 80) and the captions (y 990–1046). **Keep content between y 100 and 950.** The frame fades
-from black at the start and to black at the end.
+Import `W`, `H`, and `SAFE` from `lib.mjs`. Logical sizes are 1920×1080 for landscape,
+1080×1920 for portrait, and 1080×1080 for square. `SAFE` is `{x: 80, y: 100, w: W-160, h: H-280}`.
+Keep important content in that rectangle. Captions sit near `H - 52` and can wrap to two lines.
+The chapter bar occupies the top 80 pixels. The frame fades to black at its ends.
+
+Preview quality scales the finished canvas to half size; scene coordinates remain unchanged.
+For a narrow frame, stack a diagram's nodes vertically and wrap headings. Do not crop a landscape
+layout or only shrink its text. `scenes/main.mjs` and `scenes/examples.mjs` show adaptive layouts.
 
 ## The rules that make it look finished
 
-1. **Every arrival lands on a word or a cue**, a little early (−0.1 to −0.3 s), because the eye
-   needs a moment. Use no free-running timers.
+1. **Place important arrivals on cues**, often a little early (−0.1 to −0.3 s), so the viewer has
+   time to see them. Use scene-relative time cues when there is no narration.
 2. **Every element leaves.** Give it `tout` (usually `S.tout`) so that the scene clears before the
    next one starts. Do not hard-cut to the next scene with things still on screen, unless a
    carry-over is the point.
@@ -33,7 +38,7 @@ from black at the start and to black at the end.
    voice speaks looks broken.
 4. **One thing moves at a time.** Stagger the arrivals by 0.05–0.3 s. Light what the voice names,
    and dim the rest (to about 40%).
-5. **Use eases, not linear motion:** `expoOut` and `quartOut` to arrive, `cubicInOut` to move,
+5. **Choose motion for the subject:** `expoOut` and `quartOut` to arrive, `cubicInOut` to move,
    `backOut` (`pop`) for small things that land. Moves take 0.3–0.9 s.
 6. **Use large type.** Titles 84–180 px, labels 28–48 px, code 26–36 px, nothing under 20 px.
    Measure before you place: `measure()`, `codeSize()`, `wrap()`. Never guess a width.
@@ -85,5 +90,5 @@ App screens (`screens.mjs`): see `screens.md`.
 
 A frame should render in under 30 ms. Cache anything costly, such as text layout, offscreen
 canvases, and decoded images, at module level and not per frame. Use `prepare(t)` with a small LRU
-cache for large image sequences. Never call `getImageData` in the frame loop: it leaks native
-memory in `@napi-rs/canvas`. `render.mjs` uses `canvas.data()`.
+cache for large image sequences. Use the renderer's `canvas.data()` path for frame output.
+Avoid adding per-frame pixel copies.

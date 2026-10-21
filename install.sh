@@ -11,6 +11,7 @@ src=$(cd "$(dirname "$0")" && pwd)/skills/make-video
 copy=0; force=0; targets=""
 for a in "$@"; do
   case "$a" in
+    --help|-h) sed -n '2,9p' "$0"; exit 0 ;;
     --copy) copy=1 ;;
     --force) force=1 ;;
     claude|codex) targets="$targets $a" ;;

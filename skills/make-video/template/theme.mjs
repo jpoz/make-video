@@ -4,15 +4,20 @@
 import { GlobalFonts, createCanvas } from '@napi-rs/canvas';
 import { existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { W, H } from './config.mjs';
+export { W, H, SAFE } from './config.mjs';
 
 // Fonts are not shipped with the skill. Put .ttf/.otf files in ./fonts (see the skill's
 // references/fonts.md for where to get them); every file there is registered by its own family name.
 const FONTS = fileURLToPath(new URL('./fonts/', import.meta.url));
 const files = existsSync(FONTS) ? readdirSync(FONTS).filter(f => /\.(ttf|otf)$/i.test(f)) : [];
-for (const f of files) GlobalFonts.registerFromPath(FONTS + f);
-if (!files.length) console.warn('theme.mjs: no fonts in ./fonts, using system fonts (see references/fonts.md)');
+for (const f of files) {
+  if (!GlobalFonts.registerFromPath(FONTS + f)) throw new Error(`cannot load font: ${f}`);
+}
+for (const family of ['Atkinson Hyperlegible', 'JetBrains Mono']) {
+  if (!GlobalFonts.has(family)) throw new Error(`missing font ${family}; run ./make.sh fonts`);
+}
 
-export const W = 1920, H = 1080;
 // JetBrains Mono is the fallback for arrows and symbols Atkinson lacks (→ ↔ ✓ ⋯); system fonts come last
 export const SANS = '"Atkinson Hyperlegible", "JetBrains Mono", "Helvetica Neue", Arial, sans-serif';
 export const MONO = '"JetBrains Mono", Menlo, Consolas, monospace';

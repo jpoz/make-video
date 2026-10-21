@@ -5,7 +5,7 @@
 import { loadImage } from '@napi-rs/canvas';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { C, SANS, PI, P, clamp, lerp, cubicInOut, expoInOut, expoOut, halves, trim, ripple } from './lib.mjs';
+import { W, H, C, SANS, PI, P, clamp, lerp, cubicInOut, expoInOut, expoOut, halves, trim, ripple } from './lib.mjs';
 
 const DIR = fileURLToPath(new URL('./shots/out/', import.meta.url));
 export const IMG = {}, BOX = {};
@@ -20,7 +20,8 @@ export const mid = (shot, key) => { const b = bb(shot, key); return [b.x + b.wid
 
 // Camera keys: [time, focusX, focusY, zoom, moveDur?] in page px. The move ENDS at its time.
 // Zoom 1.06 shows the whole window; 2 to 3 is a close-up on one control.
-export const WIDE = [PW / 2, PH / 2 - 10, 1.06];
+const FIT = Math.min((W - 160) / PW, (H - 280) / (PH + BAR));
+export const WIDE = [PW / 2, PH / 2 - 10, FIT];
 export function camAt(keys, t) {
   if (t <= keys[0][0]) return keys[0].slice(1, 4);
   for (let i = 1; i < keys.length; i++) {
@@ -34,7 +35,7 @@ export function camAt(keys, t) {
   }
   return keys.at(-1).slice(1, 4);
 }
-export const toScreen = (cam, x, y) => [960 + (x - cam[0]) * cam[2], 540 + (y - cam[1]) * cam[2]];
+export const toScreen = (cam, x, y) => [W / 2 + (x - cam[0]) * cam[2], H / 2 + (y - cam[1]) * cam[2]];
 
 // Shot schedule: [[time, shotName], ...]. A new shot cross-fades in over FADE seconds.
 const FADE = 0.14;
@@ -106,9 +107,9 @@ export function appSegment(ctx, t, seg) {
   const dy = (1 - enter) * 700 + exit * 80, s = lerp(0.92, 1, enter) * lerp(1, 0.94, exit);
   ctx.save();
   ctx.globalAlpha *= clamp(enter * 1.5) * (1 - exit);
-  ctx.translate(960, 540 + dy); ctx.scale(s, s); ctx.translate(-960, -540);
+  ctx.translate(W / 2, H / 2 + dy); ctx.scale(s, s); ctx.translate(-W / 2, -H / 2);
   ctx.save();
-  ctx.translate(960, 540); ctx.scale(cam[2], cam[2]); ctx.translate(-cam[0], -cam[1]);
+  ctx.translate(W / 2, H / 2); ctx.scale(cam[2], cam[2]); ctx.translate(-cam[0], -cam[1]);
   browserWindow(ctx, cam, shotLayers(seg.shots, t), typeof seg.url === 'function' ? seg.url(t) : seg.url ?? '', seg.dark);
   for (const r of seg.rings ?? []) hiRing(ctx, cam, r.box, t, r.tin, r.tout, r.pad);
   ctx.restore();
