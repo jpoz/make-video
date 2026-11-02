@@ -34,5 +34,6 @@ with open(p, 'w', encoding='utf-8') as output:
     json.dump(spec, output, indent=2, ensure_ascii=False)
     output.write('\n')
 PY
+python3 "$dir/score.py" --ensure-seed
 cd "$dir" && ./make.sh setup
 echo "new project: $dir (name: $name)"

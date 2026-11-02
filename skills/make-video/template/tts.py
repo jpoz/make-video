@@ -2,27 +2,32 @@
 # requires-python = ">=3.10,<3.13"
 # dependencies = ["kokoro-onnx==0.4.9", "numpy", "soundfile"]
 # ///
-"""Voice-over: one Kokoro WAV per line of video.json. Local, free, no API key.
+"""Voice-over: one WAV per line of video.json, via narrate or local Kokoro.
+
+GEMINI_API_KEY selects the narrate command; otherwise speech uses local Kokoro.
 
 Writes out/voice/<scene>-<n>-<hash>.wav and out/voice.json (line lengths in seconds).
 Lines are cached by their spoken text, so editing one line re-renders only that line.
 A line is a string, or {"text": caption form, "say": spoken form} when they differ
 (code names, acronyms, file names: "video.json" is said "video dot jason").
 
-The model (~115 MB) downloads once to $MAKE_VIDEO_MODELS (default ~/.cache/make-video/models).
-Run: uv run tts.py            List voices: uv run tts.py --voices
+For local speech, the model (~115 MB) downloads once to $MAKE_VIDEO_MODELS
+(default ~/.cache/make-video/models).
+Run: ./make.sh voice    Local voices: uv run tts.py --voices    Gemini voices: narrate -voices
 """
 
+import array
 import hashlib
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.request
 import wave
 from pathlib import Path
 
-from validate import load_spec, spec_hash
+from validate import load_spec, spec_hash, speech_settings, speech_hash
 
 ROOT = Path(__file__).parent
 MODELS = Path(os.environ.get("MAKE_VIDEO_MODELS", Path.home() / ".cache/make-video/models"))
@@ -40,11 +45,40 @@ def fetch():
             os.replace(str(p) + ".part", p)
 
 
+def narrate_line(say, path, settings):
+    """Send spoken text on stdin; publish only a complete, validated PCM WAV."""
+    with tempfile.TemporaryDirectory(prefix="narrate-", dir=path.parent) as scratch:
+        raw = Path(scratch) / "speech.wav"
+        part = Path(scratch) / "normalized.wav"
+        command = [settings["command"], "-q", "-f", "-", "-o", str(raw)]
+        for key in ("voice", "model", "style"):
+            if settings[key] or key == "style":
+                command.extend([f"-{key}", settings[key]])
+        result = subprocess.run(command, input=say, capture_output=True, text=True)
+        if result.returncode:
+            detail = result.stderr.strip()
+            for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+                if os.environ.get(name):
+                    detail = detail.replace(os.environ[name], "[redacted]")
+            raise ValueError(f"narrate exited {result.returncode}: {detail}")
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(raw),
+                        "-vn", "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part)], check=True)
+        with wave.open(str(part), "rb") as audio:
+            samples = array.array("h", audio.readframes(audio.getnframes()))
+            if not any(samples):
+                raise ValueError("narrate returned empty or silent audio; change the text or delivery style")
+        os.replace(part, path)
+
+
 def main():
     spec = load_spec()
     mode = spec.get("narration", {}).get("mode", "tts")
+    settings = speech_settings(spec)
+    backend = settings["provider"]
+    if backend == "narrate" and "--voices" not in sys.argv and not settings["command"]:
+        raise ValueError("GEMINI_API_KEY is set, but narrate is not on PATH; install narrate or unset GEMINI_API_KEY to use local voices")
     engine = None
-    if mode == "tts" or "--voices" in sys.argv:
+    if backend == "kokoro" or "--voices" in sys.argv:
         fetch()
         import numpy as np
         import onnxruntime as ort
@@ -63,7 +97,10 @@ def main():
         raise ValueError(f"unknown voice {voice!r}; run uv run tts.py --voices")
     out = ROOT / "out/voice"
     out.mkdir(parents=True, exist_ok=True)
-    result = {"voice": voice, "mode": mode, "spec_hash": spec_hash(spec), "scenes": []}
+    result = {"voice": settings.get("voice", voice), "mode": mode, "provider": backend,
+              "spec_hash": spec_hash(spec), "speech_hash": speech_hash(spec), "scenes": []}
+    if mode == "tts":
+        print(f"speech provider: {backend}")
     for sc in spec["scenes"]:
         lines = []
         for n, ln in enumerate(sc.get("lines", [])):
@@ -72,7 +109,7 @@ def main():
                 duration = ln.get("duration", max(1, len(text.split()) / 2.5)) if isinstance(ln, dict) else max(1, len(text.split()) / 2.5)
                 lines.append({"text": text, "file": None, "dur": round(duration, 3)})
                 continue
-            key = hashlib.sha256(f"{voice}:{speed}:{lang}:{say}".encode()).hexdigest()[:12]
+            key = hashlib.sha256(json.dumps([settings, say], sort_keys=True).encode()).hexdigest()[:12]
             if mode == "recorded":
                 source = ROOT / Path(ln["audio"]).expanduser()
                 key = hashlib.sha256(source.read_bytes() + json.dumps([ln.get("from", 0), ln.get("to")]).encode()).hexdigest()[:12]
@@ -86,6 +123,8 @@ def main():
                 part = path.with_suffix(".part.wav")
                 subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(source), "-ss", str(start), "-t", str(end - start), "-vn", "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part)], check=True)
                 os.replace(part, path)
+            elif not path.exists() and backend == "narrate":
+                narrate_line(say, path, settings)
             elif not path.exists():
                 samples, rate = engine.create(say, voice=voice, speed=speed, lang=lang)
                 # trim near-silence at both ends so the timing is the speech itself
@@ -111,5 +150,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, OSError, wave.Error, EOFError, subprocess.CalledProcessError) as error:
         raise SystemExit(f"voice failed: {error}") from error

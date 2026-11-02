@@ -5,45 +5,47 @@
 """The score, synthesized in code without external samples. Reads timeline.json, writes out/music.wav.
 
 Styles (video.json "music.style"):
-  pop   bright groove: off-beat piano stabs, marimba hook, bouncy bass, kick, clap, hats; glockenspiel on cues
+  pop   bright groove: varied keys and melody sounds, bouncy bass, kick, clap, hats; glockenspiel on cues
   chip  quiet chiptune bed: pulse-wave arpeggios, triangle bass, soft noise hats, small kick
   none  silence (voice only)
 
 Each scene's "music" value (0..1) is its energy: more layers come in as it rises.
 A scene can instead give the layers directly, e.g. "music": {"keys": 0.8, "bass": 0.6}.
 Cue sounds (on the cue's time, already beat-snapped by timeline.py): pop, chime, click, lock, none.
-This file is a starting point: change the chords, hooks and instruments to fit the film.
+score.py chooses chords, hooks, rhythm and instrument colors from the saved music.seed.
+Run ./make.sh music --new for another composition; normal rebuilds keep the same seed.
 
 Run: uv run music.py
 """
 
+import json
 import wave
 from pathlib import Path
 
 import numpy as np
 from scipy.signal import butter, fftconvolve, sosfilt
-from validate import load_spec, check_timeline
+from score import composition
+from validate import load_spec, check_timeline, require
 
 SR = 48000
 ROOT = Path(__file__).parent
-rng = np.random.default_rng(23)
 SPEC = load_spec()
 TL = check_timeline(SPEC)
 STYLE = SPEC.get("music", {}).get("style", "pop")
+require(STYLE == "none" or "seed" in SPEC.get("music", {}),
+        "music.seed is missing; run ./make.sh music to save a seed and build the audio")
+SEED = SPEC.get("music", {}).get("seed", 0)
+SCORE = composition(SEED)
+rng = np.random.default_rng(SEED)
 DUR = TL["duration"]
 BEAT = 60.0 / TL["bpm"]
 BAR = 4 * BEAT
 E8 = BEAT / 2
 N = int((DUR + 0.5) * SR)
 
-# One chord per bar: I-V-vi-IV in F. v = stab voicing, root = bass, tones = melody notes (MIDI).
-CHORDS = [
-    dict(v=[57, 60, 65, 69], root=41, tones=[65, 69, 72, 77, 81]),  # F
-    dict(v=[55, 60, 64, 67], root=36, tones=[64, 67, 72, 76, 79]),  # C
-    dict(v=[57, 62, 65, 69], root=38, tones=[62, 65, 69, 74, 77]),  # Dm
-    dict(v=[58, 62, 65, 70], root=34, tones=[62, 65, 70, 74, 77]),  # Bb
-]
-TONIC = CHORDS[0]
+# One chord per bar. v = keyboard voicing, root = bass, tones = melody notes (MIDI).
+CHORDS = SCORE["chords"]
+TONIC = SCORE["tonic"]
 
 
 def layers(sc):
@@ -136,6 +138,33 @@ def stab(f, dur=0.16):
     return y * env
 
 
+def pluck(f, dur=0.8):
+    t = tvec(dur)
+    y = np.sin(2 * np.pi * f * t)
+    y += 0.3 * np.sin(2 * np.pi * f * 2 * t) * np.exp(-t * 12)
+    y += 0.15 * np.sin(2 * np.pi * f * 4 * t) * np.exp(-t * 25)
+    return fade_tail(y * (1 - np.exp(-t * 1800)) * np.exp(-t * 6))
+
+
+def keyboard(f, dur=0.3):
+    if SCORE["keys_voice"] == "piano":
+        return stab(f, dur)
+    if SCORE["keys_voice"] == "pluck":
+        return pluck(f, dur + 0.1) * 0.8
+    t = tvec(dur + 0.2)
+    modulation = 1.1 * np.sin(2 * np.pi * f * 2 * t) * np.exp(-t * 8)
+    y = np.sin(2 * np.pi * f * t + modulation)
+    return fade_tail(y * (1 - np.exp(-t * 600)) * np.exp(-t * 4)) * 0.8
+
+
+def lead(f):
+    if SCORE["lead_voice"] == "bell":
+        return glock(f, 0.28, 1.2)
+    if SCORE["lead_voice"] == "pluck":
+        return pluck(f) * 0.5
+    return marimba(f, 0.5)
+
+
 def bass(f, dur):
     t = tvec(dur)
     ph = 2 * np.pi * np.cumsum(f * (1 + 0.12 * np.exp(-t * 60))) / SR
@@ -188,15 +217,10 @@ def lock_click():
 
 # ---------- arrangement ----------
 
-HOOKS = [  # marimba: eighth-note steps into the chord's tones (None = rest)
-    [0, None, 2, 1, None, 3, 2, None],
-    [4, None, 3, 2, None, 1, 2, None],
-    [0, 2, None, 3, None, 2, 4, None],
-    [3, None, 2, None, 1, 0, None, None],
-]
-KICK, CLAP = [0, 3, 4], [2, 6]
-BASS = [(0, 0, 1.4), (2, 0, 0.8), (3, 12, 0.6), (5, 0, 0.9), (6, 7, 0.8)]  # (eighth, interval, length in 8ths)
-ARP = [0, 1, 2, 3, 2, 1, 2, 3]
+HOOKS = SCORE["hooks"]  # eighth-note steps into chord tones (None = rest)
+KICK, CLAP = SCORE["kick"], SCORE["clap"]
+BASS = SCORE["bass"]  # (eighth, interval, length in eighths)
+ARP = SCORE["arp"]
 
 
 def bars(buses, end):
@@ -211,19 +235,19 @@ def bars(buses, end):
             if STYLE == "chip":
                 for h in range(2):  # sixteenth arpeggio
                     m = ch["v"][ARP[(2 * k + h) % 8] % 4] + 12 + (12 if k >= 4 and b % 2 else 0)
-                    buses["keys"].add(tk + h * E8 / 2, pulse(mtof(m), E8 / 2 * 0.9), pan=0.2 * np.sin(k), gain=lv["keys"] * 0.09)
-                if lv["bass"] and k in (0, 4):
-                    buses["bass"].add(tk, tri(mtof(ch["root"]), BEAT * 1.9), gain=lv["bass"] * 0.5)
-                if lv["bass"] and k in (3, 7):
-                    buses["bass"].add(tk, tri(mtof(ch["root"] + 12), BEAT * 0.45), gain=lv["bass"] * 0.3)
+                    buses["keys"].add(tk + h * E8 / 2, pulse(mtof(m), E8 / 2 * 0.9, duty=SCORE["pulse_duty"]), pan=0.2 * np.sin(k), gain=lv["keys"] * 0.09)
+                if lv["bass"]:
+                    for e, iv, ln in BASS:
+                        if e == k:
+                            buses["bass"].add(tk, tri(mtof(ch["root"] + iv), ln * E8), gain=lv["bass"] * 0.4)
             else:
-                if lv["keys"] and k % 2 == 1:
+                if lv["keys"] and k in SCORE["keys"]:
                     for i, m in enumerate(ch["v"]):
-                        buses["keys"].add(tk + i * 0.004, stab(mtof(m)), pan=-0.25 + 0.17 * i, gain=lv["keys"] * 0.16)
+                        buses["keys"].add(tk + i * 0.004, keyboard(mtof(m)), pan=-0.25 + 0.17 * i, gain=lv["keys"] * 0.16)
                 if lv["mar"]:
                     step = HOOKS[b % 4][k]
                     if step is not None and (lv["mar"] >= 0.8 or rng.random() < lv["mar"] + 0.2):
-                        buses["mar"].add(tk, marimba(mtof(ch["tones"][step]), 0.5), pan=0.3 * np.sin(k + b), gain=lv["mar"] * 0.7)
+                        buses["mar"].add(tk, lead(mtof(ch["tones"][step])), pan=0.3 * np.sin(k + b), gain=lv["mar"] * 0.7)
                 if lv["bass"]:
                     for e, iv, ln in BASS:
                         if e == k:
@@ -234,7 +258,8 @@ def bars(buses, end):
                 buses["kick"].add(tk, kick(), gain=lv["kick"] * 0.6)
             if lv["hat"]:
                 for h in range(2):
-                    buses["hat"].add(tk + h * E8 / 2, hat(0.5 if h else 0.22), pan=0.35, gain=lv["hat"] * 0.5)
+                    if 2 * k + h in SCORE["hats"]:
+                        buses["hat"].add(tk + h * E8 / 2, hat(0.5 if h else 0.22), pan=0.35, gain=lv["hat"] * 0.5)
         b += 1
 
 
@@ -257,9 +282,9 @@ def cue_sounds(buses):
 
 def ending(buses, t):
     """Land on the tonic chord at the last downbeat that leaves ~2.5 s of ring-out."""
-    for i, m in enumerate(TONIC["v"] + [72]):
-        buses["keys"].add(t + i * 0.01, stab(mtof(m), 2.6), pan=-0.3 + 0.15 * i, gain=0.2)
-    for i, m in enumerate([77, 81, 84, 89]):
+    for i, m in enumerate(TONIC["v"] + [TONIC["tones"][2]]):
+        buses["keys"].add(t + i * 0.01, keyboard(mtof(m), 2.6), pan=-0.3 + 0.15 * i, gain=0.2)
+    for i, m in enumerate([note + 12 for note in TONIC["tones"][:4]]):
         buses["fx"].add(t + i * 0.07, glock(mtof(m), 0.3, 3.4), pan=0.3 - 0.2 * i)
     buses["bass"].add(t, bass(mtof(TONIC["root"] - 12), 3.0), gain=0.5)
     buses["kick"].add(t, kick(), gain=0.5)
@@ -297,7 +322,10 @@ def main():
     with wave.open(str(ROOT / "out/music.wav"), "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
         w.writeframes((mix.T * 32767).astype("<i2").tobytes())
-    print(f"wrote out/music.wav ({DUR:.1f}s, style {STYLE})")
+    details = {"style": STYLE, "bpm": TL["bpm"], "duration": DUR,
+               **(SCORE if STYLE != "none" else {"seed": SEED})}
+    (ROOT / "out/music.json").write_text(json.dumps(details, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote out/music.wav ({DUR:.1f}s, style {STYLE}, seed {SEED})")
 
 
 if __name__ == "__main__":

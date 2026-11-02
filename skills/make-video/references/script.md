@@ -24,7 +24,7 @@
 { "text": "Call render_frame() once per tick.", "say": "Call render frame once per tick." }
 ```
 
-`text` is the caption, and the cue words match against it. `say` is what Kokoro reads. Spell out
+`text` is the caption, and the cue words match against it. `say` is what the speech provider reads. Spell out
 acronyms letter by letter ("A P I"), file names ("config dot Y A M L"), and symbols ("hex three F").
 Listen to the storyboard. If a word sounds wrong, change `say`, never `text`.
 
@@ -36,8 +36,8 @@ Listen to the storyboard. If a word sounds wrong, change `say`, never `text`.
   "title": "Shared reports",       // storyboard title
   "fps": 60,
   "output": { "format": "landscape", "quality": "final", "workers": 2 },
-  "narration": { "mode": "tts" },   // tts, recorded, or none; see audio.md
-  "voice": "af_heart", "speed": 1.0, "lang": "en-us",   // see audio.md for voices
+  "narration": { "mode": "tts" },   // GEMINI_API_KEY: narrate; otherwise Kokoro. Also recorded or none.
+  "voice": "af_heart", "speed": 1.0, "lang": "en-us",   // Kokoro only; see audio.md for Gemini settings
   "captions": true,                // burned-in captions (the .srt/.vtt files are always written)
   "source": "../myrepo",          // root for code.mjs snippet() paths (default: the project)
   "music": { "style": "pop", "bpm": 112, "snap": true }, // snap: cues move to the nearest eighth note
@@ -66,6 +66,9 @@ Listen to the storyboard. If a word sounds wrong, change `say`, never `text`.
 }
 ```
 
+Project creation adds `music.seed` automatically. Keep it during edits so the music stays the
+same. Use `./make.sh music --new` for a new composition; see [audio.md](audio.md).
+
 - **Scene length** = the largest of `min`, or `lead` + the voice + the gaps + `tail`.
 - **Cue time** is an estimate from the word's position in its line (characters / line length × line
   length in seconds). It does not measure the spoken word. Punctuation, pauses, language, and a
@@ -86,7 +89,8 @@ Listen to the storyboard. If a word sounds wrong, change `say`, never `text`.
   See [audio.md](audio.md) for recording ranges. `voice`, `speed`, and `say` do not change recordings.
 - **`card` scenes** without a draw function use the built-in chapter card. Give the scene a draw
   function of the same id to replace it.
-- **Changing one line** voices only that line again (the cache key is the voice, speed, language and `say`).
+- **Changing one line** voices only that line again. The cache includes the provider, its voice
+  settings, and `say`. Changes to Gemini voice, model, and style also invalidate speech timing.
 
 ## The brief
 

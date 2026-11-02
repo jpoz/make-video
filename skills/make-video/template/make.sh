@@ -10,14 +10,16 @@
 #   ./make.sh scene ID [F,F]    stills at fractions of one scene + out/sheet.jpg
 #   ./make.sh clip A B          out/clip.mp4: seconds A..B of the real film, with sound
 #   ./make.sh film [--blur 4]   full render -> mix -> out/<name>.mp4, .srt, .vtt
+#   ./make.sh music [--new]    rebuild audio; --new saves a seed for a different composition
 set -e
 cd "$(dirname "$0")"
 step=${1:-storyboard}; [ $# -gt 0 ] && shift
 
 command -v python3 >/dev/null 2>&1 || { echo "missing python3: install Python 3.10 or later"; exit 1; }
 voice() {
-  mode=$(python3 validate.py --mode) || return
-  if [ "$mode" = tts ]; then uv run --quiet tts.py || return; else python3 tts.py || return; fi
+  python3 score.py --ensure-seed || return
+  backend=$(python3 validate.py --backend) || return
+  if [ "$backend" = kokoro ]; then uv run --quiet tts.py || return; else python3 tts.py || return; fi
   python3 timeline.py
 }
 validate() { python3 validate.py && node render.mjs --check; }
@@ -45,7 +47,13 @@ case "$step" in
   validate) validate ;;
   voice) python3 validate.py && voice ;;
   timeline) python3 timeline.py ;;
-  music) python3 validate.py --timeline && uv run --quiet music.py && uv run --quiet mix.py --audio ;;
+  music)
+    case "$*" in
+      "") ;;
+      --new) python3 score.py --new-seed ;;
+      *) echo "usage: ./make.sh music [--new]" >&2; exit 1 ;;
+    esac
+    audio ;;
   storyboard)
     ready
     node render.mjs --board
@@ -60,6 +68,6 @@ case "$step" in
     uv run --quiet mix.py
     name=$(python3 -c "import json;print(json.load(open('timeline.json'))['name'])")
     ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of compact "out/$name.mp4" ;;
-  help|--help|-h) sed -n '2,13p' "$0" ;;
-  *) echo "unknown command: $step"; sed -n '2,13p' "$0"; exit 1 ;;
+  help|--help|-h) sed -n '2,14p' "$0" ;;
+  *) echo "unknown command: $step"; sed -n '2,14p' "$0"; exit 1 ;;
 esac

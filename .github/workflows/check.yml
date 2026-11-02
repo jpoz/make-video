@@ -27,4 +27,5 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ffmpeg
       - run: python3 -m unittest discover -s tests -v
+      - run: python3 tests/smoke_music.py
       - run: python3 tests/smoke.py

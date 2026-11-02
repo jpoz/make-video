@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import urllib.request
+from validate import load_spec, speech_settings
 
 ROOT = Path(__file__).resolve().parent
 GOOGLE = "https://raw.githubusercontent.com/google/fonts/45e3d5269e4a17d823f6d84470bc084dc5ae46f6/ofl/atkinsonhyperlegible"
@@ -24,6 +25,16 @@ def run(*args):
 
 def tools():
     errors = []
+    speech = speech_settings(load_spec())
+    if speech["provider"] == "narrate":
+        if not speech["command"]:
+            errors.append("GEMINI_API_KEY is set, but narrate is not on PATH; install narrate or unset GEMINI_API_KEY for local voices")
+        else:
+            print(f"speech: Gemini through {speech['command']}")
+    elif speech["provider"] == "kokoro":
+        print("speech: local Kokoro (GEMINI_API_KEY is not set)")
+    else:
+        print(f"speech: {speech['provider']}")
     if sys.version_info < (3, 10):
         errors.append("Python 3.10 or later is required")
     for command, hint in (("node", "install Node.js 20 or later"), ("npm", "install npm with Node.js"), ("ffmpeg", "install ffmpeg"), ("ffprobe", "install ffprobe with ffmpeg"), ("uv", "install uv from https://docs.astral.sh/uv/")):
@@ -85,9 +96,10 @@ def main():
                 run("node", "--input-type=module", "-e", "await import('./theme.mjs')")
             except subprocess.CalledProcessError as error:
                 errors.append(f"canvas or font check failed; run ./make.sh setup\n{error.stderr.strip()}")
-        model_dir = Path(os.environ.get("MAKE_VIDEO_MODELS", Path.home() / ".cache/make-video/models"))
-        cached = all((model_dir / name).is_file() for name in ("kokoro-v1.0.int8.onnx", "voices-v1.0.bin"))
-        print("speech model: cached" if cached else "speech model: downloads on first TTS run (about 115 MB)")
+        if speech_settings(load_spec())["provider"] == "kokoro":
+            model_dir = Path(os.environ.get("MAKE_VIDEO_MODELS", Path.home() / ".cache/make-video/models"))
+            cached = all((model_dir / name).is_file() for name in ("kokoro-v1.0.int8.onnx", "voices-v1.0.bin"))
+            print("speech model: cached" if cached else "speech model: downloads on first local TTS run (about 115 MB)")
     if errors:
         raise ValueError("\n".join(errors))
     print("checks passed")

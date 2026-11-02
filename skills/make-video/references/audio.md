@@ -3,8 +3,52 @@
 ## Choose the narration mode
 
 Set `narration.mode` in `video.json` to `tts` (the default), `recorded`, or `none`.
-Recorded and silent builds use the system Python for the narration step. They do not install or
-load Kokoro. Music and mixing still use uv for their Python dependencies.
+For `tts`, the commands select `narrate` when `GEMINI_API_KEY` is nonempty, and local Kokoro when
+it is absent or empty. Recorded and silent builds do not use either speech provider. Narrate,
+recorded, and silent builds use system Python for the narration step; they do not load Kokoro.
+Music and mixing still use uv for their Python dependencies.
+
+## Gemini speech through `narrate`
+
+Install the `narrate` command on PATH and export `GEMINI_API_KEY` in the shell that runs the
+project. Then use the normal `./make.sh voice`, `storyboard`, or `film` commands. The skill uses
+the installed command; it does not bundle a platform-specific binary or read shell startup files.
+Keep the key in the environment, not in `video.json`.
+
+The command sends each line's `say` value (or `text` when `say` is absent) to Gemini. Captions
+keep the original `text`. Gemini requires network access for new speech and uses your API account.
+The skill caches each line separately and measures its WAV duration for the timeline.
+
+Optional project settings:
+
+```json
+{
+  "narration": {
+    "mode": "tts",
+    "narrate": {
+      "voice": "Kore",
+      "style": "Warm, clear, unhurried explanation."
+    }
+  }
+}
+```
+
+This is a partial configuration. `narration.narrate` supports `voice`, `style`, and `model`.
+Omitted values use `NARRATE_VOICE`, `NARRATE_STYLE`, and `NARRATE_MODEL`, then the command's defaults.
+Use `narrate -voices` to list voices. Use `style` for delivery and pace. The top-level `voice`,
+`speed`, and `lang` settings apply only to Kokoro and are not passed to `narrate`.
+
+Changing providers, voice, model, or style invalidates the affected speech and timing cache.
+The API key itself is never stored in cache metadata. If a key is set but `narrate` is missing,
+or the command fails, the build stops with an error. To select local voices for one build:
+
+```sh
+env -u GEMINI_API_KEY ./make.sh storyboard
+```
+
+`GOOGLE_API_KEY` alone does not select Gemini in this skill. The selector uses `GEMINI_API_KEY`.
+
+## Supplied recordings and no narration
 
 For recorded speech, add an audio path to every line:
 
@@ -31,9 +75,9 @@ For no narration, use `{"narration": {"mode": "none"}}`. Lines become timed capt
 `{"text": "Doors open at ten.", "duration": 3}` to set the display time. A scene can also have
 no lines, a `min` duration, and cues with explicit scene-relative `time` values.
 
-## Voice model: download and install
+## Local voice model: download and install
 
-The voice is [Kokoro](https://github.com/thewh1teagle/kokoro-onnx), which runs locally on the CPU.
+The local voice model is [Kokoro](https://github.com/thewh1teagle/kokoro-onnx), which runs on the CPU.
 It needs no API key and no account. It has two parts:
 
 - **Python packages** (`kokoro-onnx==0.4.9`, `numpy`, `soundfile`). The header of `tts.py` lists
@@ -79,23 +123,50 @@ at speed 1.0 in `en-us`. Good English voices: `af_heart`, `af_bella`, `af_nicole
 Japanese, Portuguese and Chinese voices.
 
 To compare voices, voice the first two scenes with each voice you are considering
-(`"voice"` in `video.json`, then `./make.sh storyboard`) and let the user choose in the storyboard.
+(`"voice"` in `video.json`, then `env -u GEMINI_API_KEY ./make.sh storyboard`) and let the user choose in the storyboard.
 Each voice is cached on its own, so switching back is instant.
 
 `tts.py` trims the silence from each line, so a line's length is its speech. The timing gaps come from `timing`.
 
 ## Music (`music.py`)
 
-The included score is synthesized in code and needs no external audio samples. The defaults:
+Music is synthesized locally and needs no external audio samples. The available styles:
 
-- **`pop`**: F major, I–V–vi–IV, 112 BPM. It has off-beat piano stabs, a
-  marimba hook, a bouncy bass, kick, clap, hats, and a glockenspiel on cues.
+- **`pop`**: piano, electric keys, or plucked chords; a marimba, bell, or plucked melody;
+  bass, kick, clap, hats, and glockenspiel cue sounds.
 - **`chip`**: pulse-wave arpeggios, a triangle bass, soft hats and a
   small kick. It is quieter (−24 dB RMS against −19 dB for pop) and sits under a long explainer.
 - **`none`**: voice only.
 
+These controls apply to projects made with the current template. Existing projects keep copies
+of their generator files; updating the installed skill does not update those copies. When
+upgrading a project, compare `score.py`, `music.py`, `make.sh`, and `validate.py` with the current
+template and preserve any project-specific edits.
+
+Each new project saves a random `music.seed` in `video.json`. If a manually created project has
+no seed, its first audio build saves one. The seed selects a key, chord sequence, melody, rhythm,
+and instrument colors. A normal rebuild keeps the seed, including after deleting `out/`.
+It also keeps the chosen style, tempo (`music.bpm`, default 112), and scene energy settings.
+
+To request a different track in the current project:
+
+```sh
+./make.sh music --new    # save a new seed and rebuild the music and audio mix
+./make.sh storyboard    # update the review page with the new mix
+```
+
+Run `./make.sh film` to put the new mix in the MP4. `music --new` alone does not replace an
+existing MP4 or the audio embedded in `storyboard.html`. Use it when copying a project for a
+new video, too. A plain `./make.sh music` rebuilds the selected track and reuses cached speech.
+
+To reproduce a track, retain its `music.seed` (an integer from 0 to 9007199254740991), music
+settings, timing, and generator files. `out/music.json` records the selected composition for
+inspection. Do not edit this generated file. New seeds vary the composition within the selected
+style; they do not select arbitrary genres. Edit `score.py` or the instruments in `music.py` when
+the brief calls for a different musical style.
+
 **Energy per scene:** `"music": 0..1`. Below 0.3 there are only keys. From 0.3 the bass comes in,
-from 0.45 the hats, from 0.5 the marimba, from 0.6 the kick, and from 0.85 the clap. Use high energy
+from 0.45 the hats, from 0.5 the melody (`mar` layer), from 0.6 the kick, and from 0.85 the clap. Use high energy
 for the intro and the end, about 0.6 under explanations, and 0.4 on chapter cards. Or give the
 layers directly: `"music": {"keys": 0.8, "bass": 0.6, "kick": 0, "mar": 0.3, "clap": 0, "hat": 0.4}`.
 
@@ -107,10 +178,8 @@ picture, the sound and the beat land together.
 **The ending:** the music lands on the tonic chord at the last bar line that leaves about 2.5 s,
 and then fades out.
 
-`music.py` is meant to be edited for each film. Change `CHORDS` (the key and the progression),
-`HOOKS`, the BPM, or add an instrument. Ideas: a tape stop and a lone music box for a
-"used to" flashback, or a riser into the new way. Keep the bed under the voice: it is ducked, but a
-busy melody still fights the words.
+For custom scoring, `score.py` contains the composition choices; `music.py` contains synthesis
+and arrangement. Keep the bed under the voice: it is ducked, but a busy melody still fights the words.
 
 ## Mix (`mix.py`)
 

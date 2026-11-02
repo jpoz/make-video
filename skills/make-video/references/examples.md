@@ -14,9 +14,9 @@ Use `lesson`, `event`, or `diagram` as the example name. The example configurati
 
 | Example | Example request | Included output |
 |---|---|---|
-| `lesson` | “Explain the water cycle to a class. Show each step as it is named.” | Landscape, local narration, three steps |
+| `lesson` | “Explain the water cycle to a class. Show each step as it is named.” | Landscape, generated narration, three steps |
 | `event` | “Make a short portrait announcement for an art workshop. Use music and text, with no speech.” | Portrait, no narration, scene-relative cues |
-| `diagram` | “Explain our community garden plan with a square video and a simple diagram.” | Square, local narration, three connected steps |
+| `diagram` | “Explain our community garden plan with a square video and a simple diagram.” | Square, generated narration, three connected steps |
 
 The event details are fictional. Replace the time and place before use. Match the audience's
 reading speed, and leave enough time to read each completed diagram.

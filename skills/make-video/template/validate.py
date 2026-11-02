@@ -3,8 +3,10 @@
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
+import shutil
 import sys
 
 ROOT = Path(__file__).resolve().parent
@@ -27,6 +29,29 @@ def line_text(line):
 
 def spec_hash(spec):
     return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
+
+
+def speech_settings(spec):
+    """Resolve the selected provider and non-secret settings for cache checks."""
+    mode = spec.get("narration", {}).get("mode", "tts")
+    if mode != "tts":
+        return {"provider": mode}
+    if not os.environ.get("GEMINI_API_KEY", "").strip():
+        return {"provider": "kokoro", "voice": spec.get("voice", "af_heart"),
+                "speed": spec.get("speed", 1.0), "lang": spec.get("lang", "en-us")}
+    options = spec.get("narration", {}).get("narrate", {})
+    command = shutil.which("narrate")
+    stamp = None
+    if command:
+        stat = Path(command).stat()
+        stamp = [stat.st_size, stat.st_mtime_ns]
+    return {"provider": "narrate", "command": command, "command_stamp": stamp,
+            **{name: options.get(name, os.environ.get(f"NARRATE_{name.upper()}", ""))
+               for name in ("voice", "model", "style")}}
+
+
+def speech_hash(spec):
+    return spec_hash(speech_settings(spec))
 
 
 def load_spec(root=ROOT):
@@ -52,10 +77,19 @@ def load_spec(root=ROOT):
     require(isinstance(narration, dict), "narration: expected an object")
     mode = narration.get("mode", "tts")
     require(mode in ("tts", "recorded", "none"), "narration.mode: use tts, recorded, or none")
+    narrate = narration.get("narrate", {})
+    require(isinstance(narrate, dict), "narration.narrate: expected an object")
+    require(set(narrate) <= {"voice", "model", "style"}, "narration.narrate: use voice, model, or style")
+    for key, value in narrate.items():
+        require(isinstance(value, str) and (key == "style" or value.strip()),
+                f"narration.narrate.{key}: expected {'text' if key == 'style' else 'nonempty text'}")
     music = spec.get("music", {})
     require(isinstance(music, dict), "music: expected an object")
     require(music.get("style", "pop") in ("pop", "chip", "none"), "music.style: use pop, chip, or none")
     number(music.get("bpm", 112), "music.bpm", positive=True)
+    if "seed" in music:
+        require(type(music["seed"]) is int and 0 <= music["seed"] <= 2**53 - 1,
+                "music.seed: expected an integer from 0 to 9007199254740991")
     if "snap" in music:
         require(type(music["snap"]) is bool, "music.snap: expected true or false")
     timing = spec.get("timing", {})
@@ -141,6 +175,7 @@ def load_spec(root=ROOT):
 def check_timeline(spec, root=ROOT):
     timeline = json.loads((root / "timeline.json").read_text(encoding="utf-8"))
     require(timeline.get("spec_hash") == spec_hash(spec), "timeline is stale; run ./make.sh voice")
+    require(timeline.get("speech_hash") == speech_hash(spec), "narration settings changed; run ./make.sh voice")
     number(timeline["duration"], "timeline.duration", positive=True)
     require([s["id"] for s in timeline["scenes"]] == [s["id"] for s in spec["scenes"]], "timeline scene list does not match video.json")
     for scene, source in zip(timeline["scenes"], spec["scenes"]):
@@ -155,12 +190,13 @@ def check_timeline(spec, root=ROOT):
 
 
 def audio_signature(spec, root=ROOT):
-    paths = [root / p for p in ("video.json", "validate.py", "tts.py", "timeline.py", "music.py", "mix.py")]
+    paths = [root / p for p in ("video.json", "validate.py", "tts.py", "timeline.py", "score.py", "music.py", "mix.py")]
     paths += [root / p for p in ("tts.py.lock", "music.py.lock", "mix.py.lock") if (root / p).exists()]
     paths += [root / Path(line["audio"]).expanduser() for s in spec["scenes"] for line in s.get("lines", []) if isinstance(line, dict) and "audio" in line]
     if (root / "out/extra.wav").exists():
         paths.append(root / "out/extra.wav")
     state = [(str(p), p.stat().st_size, p.stat().st_mtime_ns) for p in paths]
+    state.append(("speech", speech_hash(spec)))
     return hashlib.sha256(json.dumps(state).encode()).hexdigest()
 
 
@@ -170,6 +206,8 @@ if __name__ == "__main__":
         command = sys.argv[1] if len(sys.argv) > 1 else ""
         if command == "--mode":
             print(spec.get("narration", {}).get("mode", "tts"))
+        elif command == "--backend":
+            print(speech_settings(spec)["provider"])
         elif command == "--audio-current":
             check_timeline(spec)
             signature = (ROOT / "out/audio.signature").read_text()

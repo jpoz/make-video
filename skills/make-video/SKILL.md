@@ -8,8 +8,12 @@ description: >-
 
 # make-video
 
-Create a video with scenes drawn on a canvas and encoded by ffmpeg. Use local Kokoro speech,
+Create a video with scenes drawn on a canvas and encoded by ffmpeg. Use generated speech,
 a supplied recording, or no narration. Music is optional. Projects contain their own source files.
+
+For generated speech, use `narrate` when `GEMINI_API_KEY` is set; otherwise use local Kokoro voices.
+The commands select the provider automatically. Gemini receives the spoken text through `narrate`.
+Read [references/audio.md](references/audio.md) for voice and delivery controls.
 
 Use a storyboard for review by default. If the user has already approved the content, or asks
 for automatic completion, continue through the final render without another approval step.
@@ -28,9 +32,14 @@ Choose reasonable defaults for missing preferences:
 - Audience, purpose, and the main point to remember.
 - Length: 30–75 seconds for an announcement; 2–6 minutes for a longer explanation.
 - Format: landscape, portrait, or square. Use landscape if no destination is given.
-- Narration: local speech (`tts`), supplied audio (`recorded`), or `none`.
+- Narration: generated speech (`tts`), supplied audio (`recorded`), or `none`.
 - Look: the supplied brand, or a palette from `theme.mjs`.
 - Music: `pop`, `chip`, or `none`.
+
+New projects save a random `music.seed` and use it to compose their music. Keep that seed during
+revisions. For a different track, or a new video copied from an existing project, run
+`./make.sh music --new`. Choose the style and tempo for the subject; see
+[references/audio.md](references/audio.md) for music controls.
 
 These are starting points. Lessons do not need a sales message, and announcements do not need
 chapters. See [references/examples.md](references/examples.md) for examples outside software.
@@ -46,8 +55,9 @@ cd ./my-video
 
 This copies the template, checks tools, installs the locked Node packages, and downloads the
 default fonts with their license files. Requirements: Node.js 20+, npm, ffmpeg with ffprobe,
-Python 3.10+, and uv. Local speech uses Python 3.10–3.12 through uv. The speech model downloads
-on the first TTS run. See [references/audio.md](references/audio.md) for offline setup.
+Python 3.10+, and uv. Gemini speech also needs `narrate` on PATH. Local speech uses Python
+3.10–3.12 through uv and downloads its model on the first local TTS run.
+See [references/audio.md](references/audio.md) for offline setup.
 
 Use `./make.sh doctor` for setup problems. Reuse an existing project when revising a video.
 Do not replace its scenes or configuration with the sample template.
@@ -70,6 +80,7 @@ For exact placement, use a scene-relative `time` cue or adjust `offset` after li
 
 Read conditional references only when needed:
 
+- Characters, hands with props, springs and follow-through: [references/animation.md](references/animation.md).
 - Real app screens: [references/screens.md](references/screens.md).
 - Voices, recordings, and music: [references/audio.md](references/audio.md).
 - Custom fonts: [references/fonts.md](references/fonts.md).
@@ -121,6 +132,9 @@ caption files, and storyboard. State any checks that the available tools could n
 | `./make.sh scene ID [0.3,0.6,0.9]` | Scene stills and a contact sheet |
 | `./make.sh samples [24]` / `stills 3,20.5` | Sample frames and a contact sheet |
 | `./make.sh clip A B` | A short video with audio |
-| `./make.sh voice` / `timeline` / `music` | Rebuild one pipeline stage |
+| `./make.sh voice` / `timeline` | Rebuild voice timing or the timeline |
+| `./make.sh music` | Rebuild the selected music and audio mix |
+| `./make.sh music --new` | Save a new music seed and rebuild the audio |
 | `./make.sh preview` / `film` | Render the video and mix its audio |
 | `uv run tts.py --voices` | List local speech voices |
+| `narrate -voices` | List Gemini speech voices |

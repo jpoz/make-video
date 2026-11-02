@@ -40,6 +40,7 @@ layout or only shrink its text. `scenes/main.mjs` and `scenes/examples.mjs` show
    and dim the rest (to about 40%).
 5. **Choose motion for the subject:** `expoOut` and `quartOut` to arrive, `cubicInOut` to move,
    `backOut` (`pop`) for small things that land. Moves take 0.3–0.9 s.
+   For characters, props and spring motion, see `animation.md`.
 6. **Use large type.** Titles 84–180 px, labels 28–48 px, code 26–36 px, nothing under 20 px.
    Measure before you place: `measure()`, `codeSize()`, `wrap()`. Never guess a width.
 7. **Use few colors:** `C.fg`, `C.mute`, `C.faint` and one accent. Each color means one thing

@@ -1,7 +1,15 @@
 # Checks
 
 `python3 -m unittest discover -s tests -v` uses only the Python standard library. It checks input
-validation, missing and stale speech data, cue boundaries, caption generation, and HTML escaping.
+validation, missing and stale speech data, cue boundaries, caption generation, HTML escaping,
+composition variation, and saved music seeds.
+It also uses local command fixtures to check Gemini selection, spoken text, line caching,
+provider and voice changes, and failed or silent narration. These checks make no API requests.
+
+`python3 tests/smoke_music.py` renders and mixes actual pop, chip, and silent tracks. It checks
+that new seeds change the audio, repeated builds reproduce it, deleting output preserves the
+track, and composition changes invalidate cached audio. It needs uv and ffmpeg, with initial
+network access for audio packages. It does not need Node packages, fonts, or a speech model.
 
 `python3 tests/smoke.py` creates a temporary project and runs complete builds. It installs the
 locked Node packages and fonts, then uses uv for audio dependencies. It needs the same tools and

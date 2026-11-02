@@ -5,8 +5,9 @@ Use it for lessons, event announcements, diagrams, product introductions, and co
 
 The agent writes the script, draws scenes, and builds a storyboard with the real audio. You can
 review it before the final render, or ask the agent to complete the video automatically.
-Rendering is local. Speech can come from Kokoro, your own recording, or be omitted. Music is optional.
-No API key is needed.
+Rendering is local. With `GEMINI_API_KEY` set, generated speech uses the `narrate` command and
+Gemini. Without it, speech uses local Kokoro voices and needs no API key. You can also supply a
+recording or omit narration. Music is optional.
 
 Output includes an MP4, SRT and VTT captions, and an HTML storyboard. Choose landscape
 (1920×1080), portrait (1080×1920), or square (1080×1080). Preview output uses half the dimensions
@@ -42,14 +43,16 @@ The installer creates links in `~/.agents/skills` for Codex and `~/.claude/skill
 - Python 3.10 or later.
 - [uv](https://docs.astral.sh/uv/). It installs the Python dependencies and a compatible Python
   version for Kokoro (3.10–3.12).
+- `narrate` on PATH when `GEMINI_API_KEY` is set. It is an optional external command.
 
 The shell commands target macOS and Linux. Native Windows is not supported; use WSL. CI is
 configured for macOS and Ubuntu. Local verification details are in [the checks guide](tests/README.md).
 
 Setup downloads Node packages and the default fonts with their license files. The first audio
-build downloads Python packages. The first generated-speech build also downloads about 115 MB
-of model files to `~/.cache/make-video/models`. Recorded and silent videos do not need the model.
-After these downloads, cached projects can build offline. Optional browser captures need Playwright
+build downloads Python packages. The first local-speech build also downloads about 115 MB
+of model files to `~/.cache/make-video/models`. Gemini, recorded, and silent videos do not need the model.
+After these downloads, local speech and cached projects can build offline. New Gemini speech
+needs network access and uses your API account. Optional browser captures need Playwright
 and Chromium; see [screens.md](skills/make-video/references/screens.md).
 
 ## Run an example
@@ -99,6 +102,12 @@ Set options in the generated project's `video.json`:
 
 This is a partial configuration. Keep the project's `name` and `scenes` fields.
 Narration modes are `tts`, `recorded`, and `none`. Music styles are `pop`, `chip`, and `none`.
+The `tts` mode selects Gemini through `narrate` when `GEMINI_API_KEY` is set, and Kokoro otherwise.
+Use `narration.narrate` to set Gemini `voice`, `model`, and `style`. Top-level `voice`, `speed`,
+and `lang` control Kokoro. `./make.sh doctor` reports the selected provider.
+Each new project gets a saved music seed that varies the key, chords, melody, rhythm, and sounds.
+Edits keep that seed. Run `./make.sh music --new` for a different track, then rebuild the storyboard
+or film to include it. The built-in generator varies music within the selected style.
 See [script settings](skills/make-video/references/script.md) and
 [audio settings](skills/make-video/references/audio.md).
 
@@ -132,8 +141,9 @@ also needs package and model downloads; network speed can dominate setup time.
 
 ## Development
 
-Run `python3 -m unittest discover -s tests`. Run `python3 tests/smoke.py` for a complete build with
-recorded and silent audio. See [tests/README.md](tests/README.md) for coverage and prerequisites.
+Run `python3 -m unittest discover -s tests`. Run `python3 tests/smoke_music.py` for music generation
+and `python3 tests/smoke.py` for complete builds with recorded and silent audio.
+See [tests/README.md](tests/README.md) for coverage and prerequisites.
 
 ## License
 

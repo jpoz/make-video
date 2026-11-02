@@ -64,6 +64,8 @@ class ProjectTests(unittest.TestCase):
 
     def test_invalid_settings_fail_before_generation(self):
         cases = [('name', '../escape'), ('name', 'video'), ('name', 'clip'), ('name', 'clip-silent'), ('fps', 0), ('speed', float('nan')), ('output', {'format': 'round'}), ('output', {'workers': True}), ('narration', {'mode': 'unknown'}), ('music', {'bpm': 0}), ('scenes', [])]
+        cases += [('music', {'seed': seed}) for seed in (-1, True, 1.5, '23', None, 2**53)]
+        cases += [('narration', {'narrate': value}) for value in (None, [], {'voice': ''}, {'model': 42}, {'style': False}, {'api_key': 'do-not-store-keys'})]
         for key, value in cases:
             with self.subTest(key=key, value=value):
                 saved = self.spec.get(key)
