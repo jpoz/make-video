@@ -1,5 +1,6 @@
 // Logical scene coordinates stay stable when preview output is scaled down.
 import { readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 
 export const SPEC = JSON.parse(readFileSync(new URL('./video.json', import.meta.url), 'utf8'));
 export const FORMAT = SPEC.output?.format ?? 'landscape';
@@ -18,7 +19,9 @@ export function outputSettings(args = []) {
   const quality = option('--quality', SPEC.output?.quality ?? 'final');
   if (!['preview', 'final'].includes(quality)) throw new Error('quality must be preview or final');
   const fps = Number(option('--fps', quality === 'preview' ? Math.min(SPEC.fps ?? 60, 30) : SPEC.fps ?? 60));
-  const workers = Number(option('--workers', SPEC.output?.workers ?? 2));
+  // default: half of the CPU threads, at most 8 (more workers did not render faster in tests)
+  const auto = Math.max(1, Math.min(8, Math.floor(availableParallelism() / 2)));
+  const workers = Number(option('--workers', SPEC.output?.workers ?? auto));
   const blur = Number(option('--blur', 1));
   for (const [label, value, max] of [['fps', fps, 120], ['workers', workers, 32], ['blur', blur, 16]]) {
     if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`${label} must be an integer from 1 to ${max}`);

@@ -35,7 +35,7 @@ Listen to the storyboard. If a word sounds wrong, change `say`, never `text`.
   "name": "reports-intro",         // output file name: out/reports-intro.mp4
   "title": "Shared reports",       // storyboard title
   "fps": 60,
-  "output": { "format": "landscape", "quality": "final", "workers": 2 },
+  "output": { "format": "landscape", "quality": "final" },
   "narration": { "mode": "tts" },   // GEMINI_API_KEY: narrate; otherwise Kokoro. Also recorded or none.
   "voice": "af_heart", "speed": 1.0, "lang": "en-us",   // Kokoro only; see audio.md for Gemini settings
   "captions": true,                // burned-in captions (the .srt/.vtt files are always written)
@@ -83,7 +83,8 @@ same. Use `./make.sh music --new` for a new composition; see [audio.md](audio.md
   `at` or `time`, not both. Every cue must remain within its scene after offset and beat snapping.
 - **Formats:** `landscape` = 1920×1080, `portrait` = 1080×1920, `square` = 1080×1080.
   `preview` quality halves each dimension and caps the frame rate at 30. `final` uses full size.
-  The renderer accepts `--quality`, `--workers`, `--fps`, and `--blur` overrides.
+  The renderer accepts `--quality`, `--workers`, `--fps`, and `--blur` overrides, and `--fresh` to
+  encode every chunk again. `output.workers` is optional; the default is half of the CPU threads, at most 8.
 - **Names and IDs:** use letters, digits, hyphens, and underscores, starting with a letter or digit.
   Scene IDs and cue labels must be unique in their scope. Output names `video`, `clip`, and
   `clip-silent` are reserved for intermediate files.

@@ -46,7 +46,8 @@ layout or only shrink its text. `scenes/main.mjs` and `scenes/examples.mjs` show
 7. **Use few colors:** `C.fg`, `C.mute`, `C.faint` and one accent. Each color means one thing
    in the film (for example, red = "look here").
 8. **Make it deterministic.** Use `rng(seed)` for any randomness. Every frame must render the same
-   alone, because the workers render chunks out of order.
+   alone, because the workers render chunks out of order, and the render cache compares frames
+   drawn again later with the frames it kept.
 
 ## lib.mjs helpers
 

@@ -113,6 +113,16 @@ def main():
                 run(root, 'ffmpeg', '-v', 'error', '-i', 'out/smoke.mp4', '-f', 'null', '-')
                 print(f'PASS {format}, {mode}: {expected[0]}x{expected[1]}, h264/AAC, decoded', flush=True)
         studio(root)
+        # A second render keeps every chunk; a changed scene is encoded again.
+        assert 'chunks unchanged' in run(root, 'node', 'render.mjs').stdout
+        theme = root / 'theme.mjs'
+        original = theme.read_text()
+        theme.write_text(original.replace("bg: '#0c111e'", "bg: '#0d111e'", 1))
+        result = run(root, 'node', 'render.mjs')
+        assert 'chunks unchanged' not in result.stdout, result.stdout
+        theme.write_text(original)
+        assert 'chunks unchanged' not in run(root, 'node', 'render.mjs', '--fresh').stdout
+        print('PASS chunk cache: unchanged chunks reused, changes and --fresh encode again', flush=True)
         # Rendering must fail instead of reporting success if a draw function is absent.
         spec['scenes'][0].pop('card')
         (root / 'video.json').write_text(json.dumps(spec))

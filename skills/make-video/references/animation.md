@@ -35,7 +35,7 @@ function step(s, target, k, c, force = 0) { s.v += (k * (target - s.x) - c * s.v
 
 ### Determinism with springs
 
-The renderer draws ~10 s chunks in separate workers, out of order. A simulation must give the same
+The renderer draws chunks (one per scene, cut into parts of at most 10 s) in separate workers, out of order. A simulation must give the same
 state at `t` for any start order. Keep one state per scene, step it forward from the scene start
 with a fixed `DT`, and reset it when `t` goes backward:
 

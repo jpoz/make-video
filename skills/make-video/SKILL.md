@@ -122,8 +122,14 @@ completion, use the storyboard for your own checks and continue.
 ```
 
 Both commands write `out/<name>.mp4`, `.srt`, and `.vtt`; the later render replaces the earlier one.
-`out/render.json` records the actual dimensions, frame rate, and duration. Use `--workers N` to
-limit parallel work. Optional `--blur N` adds motion blur and increases render time.
+`out/render.json` records the actual dimensions, frame rate, and duration. The default worker count
+is half of the CPU threads, at most 8; use `--workers N` to change it. Optional `--blur N` adds motion
+blur and increases render time.
+
+The film is encoded in chunks that start at scene boundaries, kept in `out/cache/` with a checksum
+of each frame. A later render draws each chunk again and encodes only the chunks whose frames
+changed. An edit to one scene encodes only that scene; a change to the voice timing moves the
+scenes after it, so those are encoded again. `--fresh` encodes every chunk.
 
 Check the encoded video: streams, duration, sample frames, and audio at important transitions.
 Then run `python3 storyboard.py --final` to embed the film in the review page. Deliver the MP4,

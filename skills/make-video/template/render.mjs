@@ -7,12 +7,18 @@
 //   node render.mjs --board                    one still per scene (storyboard) -> out/board/
 //   node render.mjs --clip 12.5 16             a short MP4 with the mixed audio -> out/clip.mp4
 // Full film:
-//   node render.mjs [--blur 4]                 out/video.mp4 (parallel workers; --blur = motion-blur subframes)
+//   node render.mjs [--blur 4] [--fresh]       out/video.mp4 (parallel workers; --blur = motion-blur subframes)
+// The film is encoded in chunks that start at scene boundaries. Each chunk is kept in out/cache/
+// with a checksum of every frame. The next render draws each chunk again (drawing is cheap) and
+// uses the kept MP4 when every frame is the same, so only the scenes that changed are encoded.
+// --fresh encodes every chunk again.
 // The pictures come from frame.mjs; this file only samples and encodes them.
 import { createCanvas } from '@napi-rs/canvas';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import { outputSettings } from './config.mjs';
 import { W, H, clamp, lerp } from './lib.mjs';
 import { TL, DUR, SCENES, render, prepare } from './frame.mjs';
@@ -34,36 +40,50 @@ const cv = createCanvas(OUTPUT.width, OUTPUT.height), ctx = cv.getContext('2d');
 ctx.scale(OUTPUT.scale, OUTPUT.scale);
 const SUB = OUTPUT.blur, SHUTTER = 0.5;
 
-async function encode(from, to, file) {
+// x264 "veryfast" at CRF 16 is as small as "medium" at CRF 18 on flat motion graphics, with no
+// visible loss (PSNR 54 dB against 56 dB), and needs much less CPU. Changing these settings
+// changes SETTINGS below, so cached chunks are encoded again.
+const ENCODER = OUTPUT.quality === 'preview'
+  ? ['-c:v', 'libx264', '-threads', '2', '-crf', '23', '-preset', 'veryfast']
+  : ['-c:v', 'libx264', '-threads', '2', '-crf', '16', '-preset', 'veryfast'];
+// a fast checksum of a frame's pixels (zlib.crc32 is in Node 20.15+ and 22.2+)
+const crc = zlib.crc32 ? px => zlib.crc32(px) : px => createHash('sha1').update(px).digest('hex');
+
+// The RGBA bytes of frame f, with motion blur when --blur is above 1.
+const pixels = OUTPUT.width * OUTPUT.height * 4;
+const acc = SUB > 1 ? new Uint32Array(pixels) : null, blurred = SUB > 1 ? Buffer.alloc(pixels) : null;
+async function frameAt(f) {
+  // canvas images live in native memory the JS heap can't see; collect often so they're freed
+  if (globalThis.gc && f % 30 === 0) globalThis.gc();
+  if (SUB <= 1) {
+    await prepare(f / FPS); render(ctx, f / FPS);
+    return cv.data(); // not getImageData: in @napi-rs/canvas getImageData leaks native memory every frame
+  }
+  acc.fill(0);
+  for (let k = 0; k < SUB; k++) {
+    const t = (f + (k / SUB - 0.5) * SHUTTER) / FPS;
+    await prepare(t); render(ctx, t);
+    const d = cv.data();
+    for (let i = 0; i < d.length; i++) acc[i] += d[i];
+  }
+  for (let i = 0; i < blurred.length; i++) blurred[i] = (acc[i] + SUB / 2) / SUB;
+  return blurred;
+}
+
+// Encode frames from..to-1 into file. When sums is an array, each frame's checksum is added to it.
+async function encode(from, to, file, sums = null) {
   const ff = spawn('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${OUTPUT.width}x${OUTPUT.height}`, '-r', `${FPS}`, '-i', '-',
-    '-c:v', 'libx264', '-threads', '2', '-pix_fmt', 'yuv420p', '-crf', OUTPUT.quality === 'preview' ? '23' : '18', '-preset', OUTPUT.quality === 'preview' ? 'veryfast' : 'medium', '-g', `${FPS * 2}`, file], { stdio: ['pipe', 'inherit', 'inherit'] });
+    ...ENCODER, '-pix_fmt', 'yuv420p', '-g', `${FPS * 2}`, file], { stdio: ['pipe', 'inherit', 'inherit'] });
   let failure;
   const closed = new Promise(resolve => {
     ff.once('error', error => { failure = error; ff.stdin.destroy(error); resolve(null); });
     ff.once('close', resolve);
   });
   ff.stdin.on('error', error => { failure = error; });
-  const pixels = OUTPUT.width * OUTPUT.height * 4;
-  const acc = SUB > 1 ? new Uint32Array(pixels) : null, out = SUB > 1 ? Buffer.alloc(pixels) : null;
   try {
   for (let f = from; f < to; f++) {
-    // canvas images live in native memory the JS heap can't see; collect often so they're freed
-    if (globalThis.gc && f % 30 === 0) globalThis.gc();
-    let frame;
-    if (SUB > 1) {
-      acc.fill(0);
-      for (let k = 0; k < SUB; k++) {
-        const t = (f + (k / SUB - 0.5) * SHUTTER) / FPS;
-        await prepare(t); render(ctx, t);
-        const d = cv.data();
-        for (let i = 0; i < d.length; i++) acc[i] += d[i];
-      }
-      for (let i = 0; i < out.length; i++) out[i] = (acc[i] + SUB / 2) / SUB;
-      frame = out;
-    } else {
-      await prepare(f / FPS); render(ctx, f / FPS);
-      frame = cv.data(); // not getImageData: in @napi-rs/canvas getImageData leaks native memory every frame
-    }
+    const frame = await frameAt(f);
+    if (sums) sums.push(crc(frame));
     if (failure) throw failure;
     await new Promise((resolve, reject) => ff.stdin.write(frame, error => error ? reject(error) : resolve()));
   }
@@ -74,6 +94,29 @@ async function encode(from, to, file) {
   } finally {
     if (ff.exitCode === null) ff.kill();
   }
+}
+
+// One chunk of the film, kept as file (an MP4) and file.json (the checksum of each frame).
+// Returns 'cached' when the kept MP4 has exactly these frames, else encodes it and returns 'encoded'.
+async function chunk(from, to, file, fresh) {
+  const meta = file.replace(/\.mp4$/, '.json');
+  if (!fresh && existsSync(file) && existsSync(meta)) {
+    let kept = null;
+    try { kept = JSON.parse(readFileSync(meta, 'utf8')).sums; } catch { kept = null; }
+    if (Array.isArray(kept) && kept.length === to - from) {
+      let same = true;
+      for (let f = from; f < to && same; f++) same = crc(await frameAt(f)) === kept[f - from];
+      if (same) return 'cached';
+    }
+  }
+  const sums = [];
+  await encode(from, to, file + '.part.mp4', sums);
+  // remove the old checksums first, so a stopped run can never pair them with a new MP4
+  rmSync(meta, { force: true });
+  renameSync(file + '.part.mp4', file);
+  writeFileSync(meta + '.part', JSON.stringify({ from, to, sums }));
+  renameSync(meta + '.part', meta);
+  return 'encoded';
 }
 async function still(t, dir, name, scale = 1) {
   await prepare(t); render(ctx, t);
@@ -100,7 +143,8 @@ const fresh = dir => { rmSync(dir, { recursive: true, force: true }); mkdirSync(
 const WORKER = args.indexOf('--worker');
 if (WORKER >= 0 || process.env.MAKE_VIDEO_WORKER) {
   if (WORKER < 0) throw new Error('MAKE_VIDEO_WORKER is set but --worker is missing');
-  await encode(Number(args[WORKER + 1]), Number(args[WORKER + 2]), args[WORKER + 3]);
+  const result = await chunk(Number(args[WORKER + 1]), Number(args[WORKER + 2]), args[WORKER + 3], args.includes('--fresh'));
+  if (process.send) process.send(result);
 } else if (args[0] === '--stills' || args[0] === '--scene' || args[0] === '--samples') {
   const dir = fresh(ROOT + 'out/stills');
   if (args[0] === '--stills') for (const s of args[1].split(',').map(Number)) {
@@ -141,36 +185,69 @@ if (WORKER >= 0 || process.env.MAKE_VIDEO_WORKER) {
   rmSync(ROOT + 'out/clip-silent.mp4');
   console.log(`wrote out/clip.mp4 (${a}s to ${b}s)`);
 } else {
-  for (let i = 0; i < args.length; i += 2) {
+  const FRESH = args.includes('--fresh');
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--fresh') continue;
     if (!['--quality', '--workers', '--blur', '--fps'].includes(args[i])) throw new Error(`unknown render option: ${args[i]}`);
+    i += 1;
   }
-  // The film in ~10 s chunks, several workers at once. Each chunk is a fresh process, so memory is freed.
+  // Chunks start at scene boundaries, so an edit to one scene changes only its own chunks.
+  // A scene longer than 10 s is cut into equal parts, so the workers share the work.
   const total = Math.max(1, Math.round(DUR * FPS)), CHUNK = 10 * FPS, n = OUTPUT.workers;
-  const dir = fresh(ROOT + 'out/seg'), t0 = Date.now(), jobs = [];
-  for (let a = 0, i = 0; a < total; a += CHUNK, i++) jobs.push([a, Math.min(total, a + CHUNK), `${dir}/${String(i).padStart(3, '0')}.mp4`]);
-  let next = 0, done = 0;
-  const pass = ['--expose-gc', fileURLToPath(import.meta.url), '--blur', SUB, '--fps', FPS, '--quality', OUTPUT.quality];
+  const cuts = new Set([0, total]);
+  for (const s of SCENES) {
+    const a = Math.min(total, Math.round(s.start * FPS)), b = Math.min(total, Math.round(s.end * FPS));
+    cuts.add(a);
+    const parts = Math.ceil((b - a) / CHUNK);
+    for (let i = 1; i < parts; i++) cuts.add(a + Math.round(i * (b - a) / parts));
+  }
+  const bounds = [...cuts].sort((x, y) => x - y);
+  // the encoder settings name the chunk files, so preview and final chunks are kept apart
+  const SETTINGS = createHash('sha1').update(JSON.stringify({ v: 1, w: OUTPUT.width, h: OUTPUT.height, fps: FPS, blur: SUB, ENCODER })).digest('hex').slice(0, 10);
+  const cache = ROOT + 'out/cache/';
+  mkdirSync(cache, { recursive: true });
+  const jobs = [];
+  for (let i = 0; i + 1 < bounds.length; i++) {
+    const [a, b] = [bounds[i], bounds[i + 1]];
+    if (b > a) jobs.push({ a, b, name: `${SETTINGS}-${a}-${b}.mp4` });
+  }
+  const t0 = Date.now(), queue = [...jobs].sort((x, y) => (y.b - y.a) - (x.b - x.a)); // longest first
+  let done = 0, cached = 0, failed = false;
+  const pass = ['--expose-gc', fileURLToPath(import.meta.url), '--blur', SUB, '--fps', FPS, '--quality', OUTPUT.quality, ...(FRESH ? ['--fresh'] : [])];
   const children = new Set();
-  let failed = false;
   async function worker() {
-    while (!failed && next < jobs.length) {
-      const [a, b, file] = jobs[next++];
+    while (!failed && queue.length) {
+      const { a, b, name } = queue.shift();
+      let result = 'encoded';
       await new Promise((res, rej) => {
         // the child takes the worker branch (it finds --worker anywhere); MAKE_VIDEO_WORKER also marks it as a worker
-        const p = spawn(process.execPath, [...pass.slice(0, 2), '--worker', a, b, file + '.part.mp4', ...pass.slice(2)],
-          { stdio: 'inherit', env: { ...process.env, MAKE_VIDEO_WORKER: '1' } });
+        const p = spawn(process.execPath, [...pass.slice(0, 2), '--worker', a, b, cache + name, ...pass.slice(2)],
+          { stdio: ['inherit', 'inherit', 'inherit', 'ipc'], env: { ...process.env, MAKE_VIDEO_WORKER: '1' } });
         children.add(p);
+        p.on('message', m => { result = m; });
         p.once('error', rej);
         p.once('close', c => { children.delete(p); c === 0 ? res() : rej(new Error(`frames ${a}-${b} exited ${c}`)); });
       });
-      renameSync(file + '.part.mp4', file);
-      console.log(`chunk ${++done}/${jobs.length}, ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+      if (result === 'cached') cached++;
+      console.log(`chunk ${++done}/${jobs.length}${result === 'cached' ? ' (unchanged)' : ''}, ${((Date.now() - t0) / 1000).toFixed(0)} s`);
     }
   }
   try { await Promise.all(Array.from({ length: Math.min(n, jobs.length) }, worker)); }
   catch (error) { failed = true; for (const p of children) p.kill(); throw error; }
-  writeFileSync(dir + '/list.txt', jobs.map((_, i) => `file '${String(i).padStart(3, '0')}.mp4'`).join('\n'));
-  ffmpeg(['-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', dir + '/list.txt', '-c', 'copy', ROOT + 'out/video.mp4']);
-  writeFileSync(ROOT + 'out/render.json', JSON.stringify({ ...OUTPUT, duration: total / FPS }, null, 2));
-  console.log(`wrote out/video.mp4: ${total} frames at ${FPS} fps, ${n} workers, ${((Date.now() - t0) / 60000).toFixed(1)} min`);
+  writeFileSync(cache + 'list.txt', jobs.map(j => `file '${j.name}'`).join('\n'));
+  ffmpeg(['-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', cache + 'list.txt', '-c', 'copy', ROOT + 'out/video.mp4']);
+  // keep the chunks of the latest preview and final renders; remove everything else
+  writeFileSync(cache + `last-${OUTPUT.quality}.json`, JSON.stringify({ settings: SETTINGS, chunks: jobs.map(j => j.name) }));
+  const keep = new Set(['list.txt']);
+  for (const q of ['preview', 'final']) {
+    const f = cache + `last-${q}.json`;
+    if (!existsSync(f)) continue;
+    keep.add(`last-${q}.json`);
+    try { for (const c of JSON.parse(readFileSync(f, 'utf8')).chunks) { keep.add(c); keep.add(c.replace(/\.mp4$/, '.json')); } } catch {}
+  }
+  for (const f of readdirSync(cache)) if (!keep.has(f)) rmSync(cache + f, { force: true });
+  rmSync(ROOT + 'out/seg', { recursive: true, force: true }); // chunks from before the cache
+  writeFileSync(ROOT + 'out/render.json', JSON.stringify({ ...OUTPUT, duration: total / FPS, chunks: jobs.length, unchanged: cached }, null, 2));
+  const kept = cached ? `, ${cached}/${jobs.length} chunks unchanged` : '';
+  console.log(`wrote out/video.mp4: ${total} frames at ${FPS} fps, ${n} workers${kept}, ${((Date.now() - t0) / 60000).toFixed(1)} min`);
 }

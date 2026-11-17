@@ -2,7 +2,7 @@
   "name": "make-video-demo",
   "title": "How make-video works",
   "fps": 60,
-  "output": { "format": "landscape", "quality": "final", "workers": 2 },
+  "output": { "format": "landscape", "quality": "final" },
   "narration": { "mode": "tts" },
   "voice": "af_heart",
   "speed": 1.0,

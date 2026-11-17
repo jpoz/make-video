@@ -2,7 +2,7 @@
   "name": "water-cycle",
   "title": "A short lesson: the water cycle",
   "fps": 30,
-  "output": { "format": "landscape", "quality": "final", "workers": 2 },
+  "output": { "format": "landscape", "quality": "final" },
   "narration": { "mode": "tts" },
   "voice": "af_heart",
   "music": { "style": "chip", "snap": false },

@@ -99,7 +99,7 @@ Set options in the generated project's `video.json`:
 
 ```json
 {
-  "output": { "format": "portrait", "quality": "final", "workers": 2 },
+  "output": { "format": "portrait", "quality": "final" },
   "fps": 30,
   "narration": { "mode": "none" },
   "music": { "style": "pop" }
@@ -137,7 +137,11 @@ For manual fonts or offline models, see [fonts.md](skills/make-video/references/
 [audio.md](skills/make-video/references/audio.md).
 
 Render time depends on the number of frames, scene complexity, CPU, and worker count. Use
-`./make.sh studio` or `./make.sh preview` for iteration. Start with two workers; lower the count if memory is limited.
+`./make.sh studio` or `./make.sh preview` for iteration. The default worker count is half of the CPU
+threads, at most 8; lower it with `--workers N` if memory is limited. Renders keep each scene's
+encoded chunk in `out/cache/` and encode again only the scenes whose frames changed. In one check,
+an 11-minute 1080p/60 fps film took 58 seconds to render the first time on an 18-core M5 Max, 22
+seconds with no change, and 28 seconds after a change to one scene.
 Motion blur with `--blur 4` draws four subframes for each output frame.
 
 In one local check on arm64 macOS 26.5.2, project setup took 2.7 seconds with cached npm packages

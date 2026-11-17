@@ -2,7 +2,7 @@
   "name": "garden-plan",
   "title": "A narrated planning diagram",
   "fps": 30,
-  "output": { "format": "square", "quality": "final", "workers": 2 },
+  "output": { "format": "square", "quality": "final" },
   "narration": { "mode": "tts" },
   "voice": "af_heart",
   "music": { "style": "chip", "snap": false },
