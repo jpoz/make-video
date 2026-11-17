@@ -13,7 +13,7 @@ one module per chapter (`10-open.mjs`, `20-spec.mjs`, ...). Share helpers with p
 | `S.start`, `S.end`, `S.dur` | The scene's limits |
 | `S.tin`, `S.tout` | `start + 0.15` and `end − 0.55`: the default times to come in and to go out |
 | `S.cue(label)` | The time of a cue from `video.json` (beat-snapped) |
-| `S.w('word', nth)` | The estimated time of a word or phrase in the scene's voice |
+| `S.w('word', nth)` | The time of a word or phrase in the scene's voice (measured; estimated if a line could not be measured) |
 | `S.line(i)`, `S.lineEnd(i)`, `S.voiceEnd` | The voice line times |
 | `S.p(t)` | Progress through the scene, from 0 to 1 |
 

@@ -6,6 +6,8 @@
 #   ./make.sh validate          check script and scene functions
 #   ./make.sh preview           render a half-size film at up to 30 fps
 #   ./make.sh storyboard        voice -> timeline -> music -> audio mix -> one frame per scene -> storyboard.html
+#   ./make.sh studio [--port N] live preview in the browser with the audio mix; reloads on every save
+#   ./make.sh prepare           voice, word timing, timeline, and audio mix, only when out of date
 #   ./make.sh samples [N]       N stills spread over the film + out/sheet.jpg (default 24)
 #   ./make.sh scene ID [F,F]    stills at fractions of one scene + out/sheet.jpg
 #   ./make.sh clip A B          out/clip.mp4: seconds A..B of the real film, with sound
@@ -20,6 +22,8 @@ voice() {
   python3 score.py --ensure-seed || return
   backend=$(python3 validate.py --backend) || return
   if [ "$backend" = kokoro ]; then uv run --quiet tts.py || return; else python3 tts.py || return; fi
+  # measured word times; on failure the timeline estimates them from the text
+  if [ "$(python3 validate.py --align)" = on ]; then uv run --quiet align.py || echo "word timing failed; using estimates" >&2; fi
   python3 timeline.py
 }
 validate() { python3 validate.py && node render.mjs --check; }
@@ -54,6 +58,8 @@ case "$step" in
       *) echo "usage: ./make.sh music [--new]" >&2; exit 1 ;;
     esac
     audio ;;
+  prepare) ready ;;
+  studio) ready && node studio.mjs "$@" ;;
   storyboard)
     ready
     node render.mjs --board
@@ -68,6 +74,6 @@ case "$step" in
     uv run --quiet mix.py
     name=$(python3 -c "import json;print(json.load(open('timeline.json'))['name'])")
     ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of compact "out/$name.mp4" ;;
-  help|--help|-h) sed -n '2,14p' "$0" ;;
-  *) echo "unknown command: $step"; sed -n '2,14p' "$0"; exit 1 ;;
+  help|--help|-h) sed -n '2,16p' "$0" ;;
+  *) echo "unknown command: $step"; sed -n '2,16p' "$0"; exit 1 ;;
 esac

@@ -41,7 +41,7 @@ Listen to the storyboard. If a word sounds wrong, change `say`, never `text`.
   "captions": true,                // burned-in captions (the .srt/.vtt files are always written)
   "source": "../myrepo",          // root for code.mjs snippet() paths (default: the project)
   "music": { "style": "pop", "bpm": 112, "snap": true }, // snap: cues move to the nearest eighth note
-  "timing": { "gap": 0.35, "lead": 0.5, "tail": 0.8, "min": 4.0 },
+  "timing": { "gap": 0.35, "lead": 0.5, "tail": 0.8, "min": 4.0 }, // "align": false turns off word timing
   "brief": { "lede": "...", "approach": ["..."], "questions": ["..."] },
   "scenes": [
     {
@@ -70,9 +70,14 @@ Project creation adds `music.seed` automatically. Keep it during edits so the mu
 same. Use `./make.sh music --new` for a new composition; see [audio.md](audio.md).
 
 - **Scene length** = the largest of `min`, or `lead` + the voice + the gaps + `tail`.
-- **Cue time** is an estimate from the word's position in its line (characters / line length × line
-  length in seconds). It does not measure the spoken word. Punctuation, pauses, language, and a
-  different `say` value can move the actual word away from the estimate. Listen and adjust `offset`.
+- **Cue time** is the measured start of the word. `align.py` listens to each voice line with a small
+  Whisper model and writes `out/words.json`. `timeline.py` gives each word of `text` a `[start, end]`
+  mark in `timeline.json`. When `say` differs from `text` ("video.json" said "video dot jason"), the
+  text word takes the times of the spoken words in its place. A line where fewer than half of the
+  words match, or that could not be measured, uses an estimate from the word's position in the text.
+  `timeline.py` prints how many lines were measured. Measured times can still be off by about 0.1 s:
+  listen at critical cues, and use `offset` for a deliberate lead or delay.
+- **Captions** start when their first word is spoken and stay until the next caption starts.
 - **Explicit cues** use `{"label": "reveal", "time": 2.5}`: seconds from the scene start. They work
   without narration and do not snap to the music unless `snap: true` is set on that cue. Use either
   `at` or `time`, not both. Every cue must remain within its scene after offset and beat snapping.

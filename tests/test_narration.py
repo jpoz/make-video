@@ -22,7 +22,7 @@ class NarrationTests(unittest.TestCase):
         scratch = tempfile.TemporaryDirectory(prefix="make-video narration's ")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
-        for name in ('validate.py', 'tts.py', 'timeline.py', 'score.py', 'music.py', 'mix.py', 'make.sh'):
+        for name in ('validate.py', 'tts.py', 'align.py', 'timeline.py', 'score.py', 'music.py', 'mix.py', 'make.sh'):
             shutil.copy2(TEMPLATE / name, self.root / name)
         self.bin = self.root / 'bin'
         self.bin.mkdir()

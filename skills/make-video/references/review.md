@@ -5,6 +5,10 @@ image files). Do this at every step, and fix problems before the user sees them.
 
 ## When to sample
 
+For the user, `./make.sh studio` plays the film live in a browser with its audio, and highlights each
+word of the script as it is spoken. Offer it when they want to watch changes. For your own checks,
+use the commands below: you must see the frames yourself.
+
 | When | Command | Look for |
 |---|---|---|
 | After you draw or change a scene | `./make.sh scene <id> 0.2,0.5,0.8,0.95` | The layout, overlaps, text size, an empty frame |

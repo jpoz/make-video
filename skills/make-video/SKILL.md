@@ -74,9 +74,11 @@ Each scene receives `(ctx, t, S)`. Draw deterministically: workers can render fr
 Use `W`, `H`, and `SAFE` for layout. Portrait and square frames need their own arrangement;
 changing output dimensions does not reflow custom scene code automatically.
 
-Use cues to place important changes near the words that describe them. Word-based cues are
-estimates from text positions, not measured speech timestamps. Check critical timing with sound.
-For exact placement, use a scene-relative `time` cue or adjust `offset` after listening.
+Use cues to place important changes near the words that describe them. `./make.sh voice` measures
+when each spoken word starts (`align.py`), so word-based cues, `S.w()`, and caption breaks land on the
+real words. A line that could not be measured uses an estimate from its text; the timeline output and
+the studio list say which lines are estimates. Check critical timing with sound. Adjust `offset`
+for a deliberate lead or delay, or use a scene-relative `time` cue.
 
 Read conditional references only when needed:
 
@@ -91,6 +93,11 @@ check that the chosen lines support the explanation. Run a program before showin
 Run `./make.sh validate` before a long build. During drawing, use `./make.sh scene ID` and inspect
 `out/sheet.jpg`. These commands build missing or stale audio and timing data. Use `./make.sh clip A B`
 for transitions and precise timing. See [references/review.md](references/review.md).
+
+When the user wants to watch the work while it changes, start `./make.sh studio` in the background
+and give them the URL it prints. The studio plays the real frames with the audio mix and reloads when
+a file is saved, so no preview render is needed for each change. It does not replace your own
+stills and clips: you cannot see the browser.
 
 ## 4. Review the storyboard
 
@@ -129,10 +136,12 @@ caption files, and storyboard. State any checks that the available tools could n
 | `./make.sh setup` / `doctor` / `fonts` | Install dependencies, check setup, or fetch fonts |
 | `./make.sh validate` | Check script inputs and scene functions |
 | `./make.sh storyboard` | Audio, timeline, board frames, and storyboard page |
+| `./make.sh studio [--port N]` | Live preview in the browser with the audio mix; reloads on save |
+| `./make.sh prepare` | Voice, word timing, timeline, and audio mix, when out of date |
 | `./make.sh scene ID [0.3,0.6,0.9]` | Scene stills and a contact sheet |
 | `./make.sh samples [24]` / `stills 3,20.5` | Sample frames and a contact sheet |
 | `./make.sh clip A B` | A short video with audio |
-| `./make.sh voice` / `timeline` | Rebuild voice timing or the timeline |
+| `./make.sh voice` / `timeline` | Rebuild voice and word timing, or the timeline |
 | `./make.sh music` | Rebuild the selected music and audio mix |
 | `./make.sh music --new` | Save a new music seed and rebuild the audio |
 | `./make.sh preview` / `film` | Render the video and mix its audio |

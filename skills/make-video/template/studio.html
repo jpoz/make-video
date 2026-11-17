@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>make-video studio</title>
+<style>
+  :root { --bg: #0b0e16; --panel: #121725; --line: #232a3d; --fg: #e8e4da; --mute: #8a90a2; --accent: #ff5a3c; --cue: #ffb347; --ok: #6fd08c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  body { display: grid; grid-template-columns: 1fr 360px; grid-template-rows: 1fr auto; height: 100vh; }
+  #stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 16px; }
+  #view { background: #000; box-shadow: 0 0 0 1px var(--line); }
+  #error { position: absolute; inset: 16px; display: none; overflow: auto; padding: 16px; background: rgba(40, 8, 8, 0.94); border: 1px solid #a33; color: #ffd9d4; font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  #busy { position: absolute; top: 24px; left: 24px; display: none; padding: 4px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; color: var(--cue); }
+  aside { grid-row: 1 / 3; grid-column: 2; overflow: auto; background: var(--panel); border-left: 1px solid var(--line); }
+  aside h1 { margin: 0; padding: 14px 16px 6px; font-size: 15px; }
+  aside .meta { padding: 0 16px 12px; color: var(--mute); font-size: 12px; border-bottom: 1px solid var(--line); }
+  .scene { padding: 10px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .scene.now { background: #1a2133; box-shadow: inset 3px 0 0 var(--accent); }
+  .scene .id { font: 600 12px ui-monospace, Menlo, monospace; }
+  .scene .when { float: right; color: var(--mute); font: 12px ui-monospace, Menlo, monospace; }
+  .scene .card { color: var(--mute); font-style: italic; }
+  .line { margin-top: 4px; color: #c9c5bb; }
+  .line .w { border-radius: 2px; }
+  .line .w.said { color: var(--fg); }
+  .line .w.now { background: var(--accent); color: #fff; }
+  .line.est::after { content: " ≈"; color: var(--mute); }
+  .cues { margin-top: 4px; }
+  .cues span { display: inline-block; margin: 2px 4px 0 0; padding: 0 6px; border: 1px solid var(--line); border-radius: 9px; color: var(--cue); font-size: 11px; cursor: pointer; }
+  footer { grid-column: 1; padding: 8px 16px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  button { background: #1d2436; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  #time { font: 13px ui-monospace, Menlo, monospace; min-width: 150px; cursor: copy; }
+  #stats { margin-left: auto; color: var(--mute); font-size: 12px; }
+  #track { position: relative; height: 46px; margin-top: 8px; background: #0d111b; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; user-select: none; }
+  .seg { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--line); overflow: hidden; padding: 3px 5px; color: var(--mute); font: 11px ui-monospace, Menlo, monospace; white-space: nowrap; }
+  .seg.card { background: rgba(255, 255, 255, 0.03); }
+  .voice { position: absolute; bottom: 4px; height: 6px; background: rgba(111, 208, 140, 0.35); border-radius: 2px; }
+  .tick { position: absolute; bottom: 0; width: 2px; height: 16px; background: var(--cue); }
+  #head { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); pointer-events: none; }
+  #hover { position: absolute; top: -22px; padding: 1px 6px; background: #000; border-radius: 3px; font: 11px ui-monospace, Menlo, monospace; pointer-events: none; display: none; white-space: nowrap; }
+  .keys { margin-top: 6px; color: var(--mute); font-size: 11px; }
+  kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; font: 11px ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="view" width="960" height="540"></canvas><div id="busy"></div><pre id="error"></pre></div>
+<aside><h1 id="title">make-video</h1><div class="meta" id="meta"></div><div id="scenes"></div></aside>
+<footer>
+  <div class="row">
+    <button id="play" title="Space">Play</button>
+    <button id="loop" title="L">Loop scene</button>
+    <span id="time" title="Click to copy the time"></span>
+    <span id="stats"></span>
+  </div>
+  <div id="track"><div id="head"></div><div id="hover"></div></div>
+  <div class="keys"><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> one frame · <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> one second · <kbd>[</kbd><kbd>]</kbd> scene · <kbd>L</kbd> loop scene · <kbd>C</kbd> copy a clip command for this scene · ≈ = estimated word times</div>
+</footer>
+<audio id="audio" preload="auto"></audio>
+<script>
+const $ = id => document.getElementById(id);
+const view = $('view'), g = view.getContext('2d'), audio = $('audio'), track = $('track');
+let TL = null, state = null, version = -1, audioVersion = -1;
+let playing = false, loop = false, t = 0, clock = null;   // clock: {start: performance.now(), t0} when there is no audio
+let inflight = false, shown = { t: -1, v: -1, w: 0 }, frames = [];
+
+const fmt = s => `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`;
+const hasAudio = () => audio.src && !audio.error && audio.readyState > 0;
+const sceneAt = s => TL.scenes.find(sc => s >= sc.start && s < sc.end) ?? TL.scenes.at(-1);
+const clampT = s => Math.min(Math.max(0, s), Math.max(0, TL.duration - 0.001));
+
+function now() {
+  if (!playing) return t;
+  if (hasAudio()) return audio.currentTime;
+  return clock.t0 + (performance.now() - clock.start) / 1000;
+}
+function seek(s) {
+  t = clampT(s);
+  if (hasAudio()) audio.currentTime = t;
+  if (clock) clock = { start: performance.now(), t0: t };
+  update();
+}
+function setPlaying(on) {
+  playing = on && !!TL;
+  $('play').textContent = playing ? 'Pause' : 'Play';
+  if (playing) {
+    if (t >= TL.duration - 0.01) seek(0);
+    clock = { start: performance.now(), t0: t };
+    if (hasAudio()) { audio.currentTime = t; audio.play().catch(() => {}); }
+  } else {
+    if (hasAudio()) { audio.pause(); t = audio.currentTime; }
+    else if (clock) t = clampT(now());
+    clock = null;
+  }
+}
+
+// ---------- fit the picture to the free space, keeping its shape ----------
+function fit() {
+  if (!state) return;
+  const box = $('stage').getBoundingClientRect(), pad = 32;
+  const k = Math.min((box.width - pad) / state.width, (box.height - pad) / state.height);
+  view.style.width = `${Math.max(1, Math.floor(state.width * k))}px`;
+  view.style.height = `${Math.max(1, Math.floor(state.height * k))}px`;
+}
+window.addEventListener('resize', fit);
+
+// ---------- frames: one request at a time, always for the newest time ----------
+function wanted() {
+  const dpr = window.devicePixelRatio || 1;
+  const box = view.getBoundingClientRect();
+  const full = Math.min(state.width, Math.round(box.width * dpr));
+  return playing ? Math.min(full, 960) : full;   // smaller frames keep playback smooth; full size when paused
+}
+async function pump() {
+  if (inflight || !state?.ready || !TL) return;
+  const w = wanted();
+  if (Math.abs(shown.t - t) < 1e-4 && shown.v === version && shown.w === w) return;
+  inflight = true;
+  const at = t, v = version;
+  try {
+    const res = await fetch(`/frame?t=${at.toFixed(4)}&w=${w}`);
+    if (!res.ok) throw new Error(await res.text());
+    const bmp = await createImageBitmap(await res.blob());
+    if (view.width !== bmp.width || view.height !== bmp.height) { view.width = bmp.width; view.height = bmp.height; }
+    g.drawImage(bmp, 0, 0);
+    bmp.close();
+    shown = { t: at, v, w };
+    frames.push(performance.now());
+    showError(null);
+  } catch (error) {
+    if (state?.ready) showError(error.message);
+    shown = { t: at, v, w };
+  } finally { inflight = false; }
+}
+
+function loopTick() {
+  if (TL) {
+    if (playing) {
+      t = clampT(now());
+      const sc = sceneAt(t);
+      if (loop && t >= sc.end - 0.02) seek(sc.start);
+      else if (t >= TL.duration - 0.002) { t = TL.duration - 0.001; setPlaying(false); }
+    }
+    update();
+    pump();
+  }
+  requestAnimationFrame(loopTick);
+}
+
+// ---------- the scene list and the track ----------
+function build() {
+  $('title').textContent = TL.title ?? TL.name;
+  const lines = TL.scenes.flatMap(s => s.lines), measured = lines.filter(l => l.aligned).length;
+  $('meta').textContent = `${fmt(TL.duration)} · ${TL.scenes.length} scenes · ${state.width}×${state.height} · ` +
+    (lines.length ? `${measured}/${lines.length} lines with measured word times` : 'no voice lines');
+  const list = $('scenes');
+  list.replaceChildren();
+  for (const sc of TL.scenes) {
+    const el = document.createElement('div');
+    el.className = 'scene'; el.dataset.id = sc.id;
+    const head = document.createElement('div');
+    head.innerHTML = `<span class="id"></span><span class="when"></span>`;
+    head.firstChild.textContent = sc.id + (sc.chapter ? ` · ${sc.chapter}` : '');
+    head.lastChild.textContent = `${sc.start.toFixed(2)}–${sc.end.toFixed(2)}`;
+    el.append(head);
+    if (sc.card) { const c = document.createElement('div'); c.className = 'card'; c.textContent = `card: ${sc.card.title}`; el.append(c); }
+    sc.lines.forEach(ln => {
+      const row = document.createElement('div');
+      row.className = 'line' + (ln.aligned ? '' : ' est');
+      const words = ln.text.split(/\s+/).filter(Boolean);
+      words.forEach((w, k) => {
+        const span = document.createElement('span');
+        span.className = 'w'; span.textContent = w;
+        const m = ln.marks?.[k];
+        span.dataset.a = m ? m[0] : ln.start; span.dataset.b = m ? m[1] : ln.start + ln.dur;
+        span.onclick = e => { e.stopPropagation(); seek(Number(span.dataset.a)); };
+        row.append(span, ' ');
+      });
+      el.append(row);
+    });
+    const cues = Object.entries(sc.cues ?? {});
+    if (cues.length) {
+      const c = document.createElement('div'); c.className = 'cues';
+      for (const [label, at] of cues) {
+        const s = document.createElement('span');
+        s.textContent = `${label} ${at.toFixed(2)}`;
+        s.onclick = e => { e.stopPropagation(); seek(Math.max(sc.start, at - 0.5)); };
+        c.append(s);
+      }
+      el.append(c);
+    }
+    el.onclick = () => seek(sc.start);
+    list.append(el);
+  }
+  // track: scene blocks, voice lines, cue ticks
+  for (const n of [...track.querySelectorAll('.seg, .voice, .tick')]) n.remove();
+  const pct = s => `${(100 * s / TL.duration).toFixed(4)}%`;
+  for (const sc of TL.scenes) {
+    const seg = document.createElement('div');
+    seg.className = 'seg' + (sc.card ? ' card' : '');
+    seg.style.left = pct(sc.start); seg.style.width = pct(sc.end - sc.start);
+    seg.textContent = sc.id;
+    track.append(seg);
+    for (const ln of sc.lines) {
+      const v = document.createElement('div');
+      v.className = 'voice'; v.style.left = pct(ln.start); v.style.width = pct(ln.dur);
+      track.append(v);
+    }
+  }
+  for (const e of TL.events ?? []) {
+    const k = document.createElement('div');
+    k.className = 'tick'; k.style.left = pct(e.t); k.title = `${e.scene}.${e.label} ${e.t.toFixed(2)}s`;
+    track.append(k);
+  }
+}
+
+let lastScene = null;
+function update() {
+  if (!TL) return;
+  const fps = TL.fps ?? 60;
+  $('time').textContent = `${fmt(t)} · f${Math.round(t * fps)}`;
+  $('head').style.left = `${(100 * t / TL.duration).toFixed(4)}%`;
+  const sc = sceneAt(t);
+  if (sc.id !== lastScene) {
+    lastScene = sc.id;
+    for (const el of document.querySelectorAll('.scene')) el.classList.toggle('now', el.dataset.id === sc.id);
+    document.querySelector(`.scene[data-id="${CSS.escape(sc.id)}"]`)?.scrollIntoView({ block: 'nearest' });
+  }
+  for (const w of document.querySelectorAll('.scene.now .w')) {
+    const a = Number(w.dataset.a), b = Number(w.dataset.b);
+    w.classList.toggle('now', t >= a && t < Math.max(b, a + 0.08));
+    w.classList.toggle('said', t >= b);
+  }
+  const recent = frames.filter(x => performance.now() - x < 1000);
+  frames = recent;
+  $('stats').textContent = state?.building ? 'building…' : playing ? `${recent.length} frames/s` : '';
+}
+
+function showError(text) {
+  $('error').style.display = text ? 'block' : 'none';
+  $('error').textContent = text ?? '';
+}
+
+// ---------- server state: reload on change ----------
+async function apply(s) {
+  state = s;
+  $('busy').style.display = s.building ? 'block' : 'none';
+  $('busy').textContent = 'building voice and timeline…';
+  if (s.error) showError(s.error);
+  if (!s.ready || s.version === version) return;
+  const res = await fetch('/timeline.json');
+  if (!res.ok) return showError(await res.text());
+  TL = await res.json();
+  version = s.version;
+  fit();
+  if (s.audio !== audioVersion) {
+    audioVersion = s.audio;
+    const was = playing;
+    if (was) setPlaying(false);
+    audio.src = s.audio ? `/audio?v=${s.audio}` : '';
+    if (s.audio) {
+      await new Promise(r => { audio.onloadedmetadata = r; audio.onerror = r; });
+      audio.currentTime = clampT(t);
+    }
+    if (was) setPlaying(true);
+  }
+  t = clampT(t);
+  lastScene = null;
+  build();
+  showError(null);
+}
+const events = new EventSource('/events');
+events.onmessage = e => apply(JSON.parse(e.data));
+events.onerror = () => showError('lost the connection to studio.mjs; is it still running?');
+events.onopen = () => { if (state?.ready) showError(null); };
+
+// ---------- input ----------
+let dragging = false;
+const trackTime = e => { const r = track.getBoundingClientRect(); return TL.duration * Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
+track.onpointerdown = e => { if (!TL) return; dragging = true; track.setPointerCapture(e.pointerId); seek(trackTime(e)); };
+track.onpointermove = e => {
+  if (!TL) return;
+  const s = trackTime(e), h = $('hover');
+  h.style.display = 'block'; h.style.left = `${e.clientX - track.getBoundingClientRect().left}px`;
+  h.textContent = `${s.toFixed(2)}s ${sceneAt(s).id}`;
+  if (dragging) seek(s);
+};
+track.onpointerup = () => { dragging = false; };
+track.onpointerleave = () => { $('hover').style.display = 'none'; };
+$('play').onclick = () => setPlaying(!playing);
+$('loop').onclick = () => { loop = !loop; $('loop').classList.toggle('on', loop); };
+$('time').onclick = () => navigator.clipboard?.writeText(t.toFixed(2));
+document.onkeydown = e => {
+  if (!TL || e.metaKey || e.ctrlKey || e.altKey) return;
+  const fps = TL.fps ?? 60, sc = sceneAt(t), i = TL.scenes.indexOf(sc);
+  if (e.key === ' ') setPlaying(!playing);
+  else if (e.key === 'ArrowRight') seek(t + (e.shiftKey ? 1 : 1 / fps));
+  else if (e.key === 'ArrowLeft') seek(t - (e.shiftKey ? 1 : 1 / fps));
+  else if (e.key === ']') seek(TL.scenes[Math.min(i + 1, TL.scenes.length - 1)].start);
+  else if (e.key === '[') seek(t - sc.start > 0.5 ? sc.start : TL.scenes[Math.max(0, i - 1)].start);
+  else if (e.key === 'l' || e.key === 'L') $('loop').click();
+  else if (e.key === 'c' || e.key === 'C') navigator.clipboard?.writeText(`./make.sh clip ${sc.start.toFixed(2)} ${sc.end.toFixed(2)}`);
+  else return;
+  e.preventDefault();
+};
+requestAnimationFrame(loopTick);
+</script>
+</body>
+</html>

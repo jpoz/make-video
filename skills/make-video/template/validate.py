@@ -97,6 +97,8 @@ def load_spec(root=ROOT):
     for key in ("gap", "lead", "tail", "min"):
         if key in timing:
             number(timing[key], f"timing.{key}", positive=key == "min")
+    if "align" in timing:
+        require(type(timing["align"]) is bool, "timing.align: expected true or false")
     brief = spec.get("brief", {})
     require(isinstance(brief, dict), "brief: expected an object")
     require(isinstance(brief.get("lede", ""), str), "brief.lede: expected text")
@@ -190,8 +192,8 @@ def check_timeline(spec, root=ROOT):
 
 
 def audio_signature(spec, root=ROOT):
-    paths = [root / p for p in ("video.json", "validate.py", "tts.py", "timeline.py", "score.py", "music.py", "mix.py")]
-    paths += [root / p for p in ("tts.py.lock", "music.py.lock", "mix.py.lock") if (root / p).exists()]
+    paths = [root / p for p in ("video.json", "validate.py", "tts.py", "align.py", "timeline.py", "score.py", "music.py", "mix.py")]
+    paths += [root / p for p in ("tts.py.lock", "align.py.lock", "music.py.lock", "mix.py.lock", "out/words.json") if (root / p).exists()]
     paths += [root / Path(line["audio"]).expanduser() for s in spec["scenes"] for line in s.get("lines", []) if isinstance(line, dict) and "audio" in line]
     if (root / "out/extra.wav").exists():
         paths.append(root / "out/extra.wav")
@@ -208,6 +210,9 @@ if __name__ == "__main__":
             print(spec.get("narration", {}).get("mode", "tts"))
         elif command == "--backend":
             print(speech_settings(spec)["provider"])
+        elif command == "--align":
+            on = spec.get("narration", {}).get("mode", "tts") != "none" and spec.get("timing", {}).get("align", True)
+            print("on" if on else "off")
         elif command == "--audio-current":
             check_timeline(spec)
             signature = (ROOT / "out/audio.signature").read_text()

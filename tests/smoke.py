@@ -28,6 +28,46 @@ def run(root, *args, success=True, env=None):
     return result
 
 
+def studio(root):
+    """The live preview serves its page, real frames, and seekable audio, and reloads on scene edits."""
+    import re
+    import urllib.request
+    proc = subprocess.Popen(['node', 'studio.mjs', '--port', '4790'], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        url, deadline = None, time.monotonic() + 60
+        while time.monotonic() < deadline and url is None:
+            line = proc.stdout.readline()
+            match = re.search(r'http://127\.0\.0\.1:\d+/', line)
+            url = match.group(0) if match else None
+        assert url, 'studio did not start'
+
+        def get(path, headers=None):
+            with urllib.request.urlopen(urllib.request.Request(url + path, headers=headers or {}), timeout=20) as res:
+                return res.status, res.read()
+
+        def wait_version(version):
+            for _ in range(200):
+                state = json.loads(get('state')[1])
+                if state['ready'] and state['version'] >= version:
+                    return state
+                time.sleep(0.1)
+            raise AssertionError(f'studio did not reach version {version}: {state}')
+
+        state = wait_version(1)
+        assert b'make-video studio' in get('')[1]
+        status, jpeg = get('frame?t=0.8&w=480')
+        assert status == 200 and jpeg[:2] == b'\xff\xd8', status
+        status, part = get('audio', {'Range': 'bytes=0-9'})
+        assert status == 206 and len(part) == 10, status
+        scene = root / 'scenes/main.mjs'
+        scene.write_text(scene.read_text() + '\n// edited\n')
+        wait_version(state['version'] + 1)
+        print('PASS studio: page, frames, audio ranges, reload on edit', flush=True)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--prepared', type=Path)
@@ -55,7 +95,7 @@ def main():
                 line = {'text': 'A short caption with a clear cue.', 'duration': 0.6}
                 if mode == 'recorded':
                     line.update(audio='recording.wav', **{'from': 0.1, 'to': 0.7})
-                spec = {'name': 'smoke', 'title': 'Render & check', 'fps': 12, 'output': {'format': format, 'quality': 'preview', 'workers': 1}, 'narration': {'mode': mode}, 'music': {'style': 'none', 'snap': False}, 'timing': {'lead': 0.2, 'gap': 0, 'tail': 0.3, 'min': 1.5}, 'scenes': [{'id': 'card', 'card': {'title': 'A clear result'}, 'lines': [line], 'cues': [{'label': 'cue', 'at': 'clear'}]}]}
+                spec = {'name': 'smoke', 'title': 'Render & check', 'fps': 12, 'output': {'format': format, 'quality': 'preview', 'workers': 1}, 'narration': {'mode': mode}, 'music': {'style': 'none', 'snap': False}, 'timing': {'lead': 0.2, 'gap': 0, 'tail': 0.3, 'min': 1.5, 'align': False}, 'scenes': [{'id': 'card', 'card': {'title': 'A clear result'}, 'lines': [line], 'cues': [{'label': 'cue', 'at': 'clear'}]}]}
                 (root / 'video.json').write_text(json.dumps(spec))
                 # scene must build its own missing/stale timeline, before storyboard or film.
                 run(root, './make.sh', 'scene', 'card')
@@ -72,6 +112,7 @@ def main():
                 assert 'A short caption' in (root / 'out/smoke.srt').read_text()
                 run(root, 'ffmpeg', '-v', 'error', '-i', 'out/smoke.mp4', '-f', 'null', '-')
                 print(f'PASS {format}, {mode}: {expected[0]}x{expected[1]}, h264/AAC, decoded', flush=True)
+        studio(root)
         # Rendering must fail instead of reporting success if a draw function is absent.
         spec['scenes'][0].pop('card')
         (root / 'video.json').write_text(json.dumps(spec))

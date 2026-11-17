@@ -69,11 +69,24 @@ This is a partial configuration. Keep the project's other settings and its draw 
 `intro`. Paths are relative to the project. Omit `from` and `to` to use a complete file for one
 line. ffmpeg converts each selected range to a cached mono WAV. The original file is preserved.
 The normal scene lead, line gaps, and tail still apply; set gaps to zero for adjoining ranges.
-The text is the supplied transcript. Word cues are estimates, including for recordings.
+The text is the supplied transcript. Word cues use the measured word times of the recording, so
+the transcript must match what is said. Lines that do not match use estimates.
 
 For no narration, use `{"narration": {"mode": "none"}}`. Lines become timed captions; use
 `{"text": "Doors open at ten.", "duration": 3}` to set the display time. A scene can also have
 no lines, a `min` duration, and cues with explicit scene-relative `time` values.
+
+## Word timing model
+
+`./make.sh voice` runs `align.py` after speech, for generated speech and for recordings. It uses
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) with the `base.en` model (`base` for
+other languages). The first run downloads about 150 MB of Python packages and model files; the model
+goes to `$MAKE_VIDEO_MODELS/whisper`. Each line is measured once, and later runs use
+`out/words.json`. Measuring a 30-second film takes a few seconds on a laptop CPU.
+
+If the packages or model cannot be loaded (for example, an offline machine), the build continues
+with estimated word times and prints a warning. Set `"timing": {"align": false}` to turn off word
+timing completely.
 
 ## Local voice model: download and install
 

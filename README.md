@@ -51,6 +51,8 @@ configured for macOS and Ubuntu. Local verification details are in [the checks g
 Setup downloads Node packages and the default fonts with their license files. The first audio
 build downloads Python packages. The first local-speech build also downloads about 115 MB
 of model files to `~/.cache/make-video/models`. Gemini, recorded, and silent videos do not need the model.
+The first narrated build downloads about 150 MB for word timing (faster-whisper). Without it, cues
+use estimated word times.
 After these downloads, local speech and cached projects can build offline. New Gemini speech
 needs network access and uses your API account. Optional browser captures need Playwright
 and Chromium; see [screens.md](skills/make-video/references/screens.md).
@@ -67,6 +69,10 @@ cd ./art-video
 ```
 
 Open `storyboard.html` to inspect the scenes. The preview is `out/art-video.mp4`.
+
+To watch the film while you edit it, run `./make.sh studio` and open the URL it prints. It plays the
+real frames with the audio mix, highlights each word of the script as it is spoken, and reloads when
+you save a scene file or `video.json`. Nothing is encoded.
 
 ```sh
 ./make.sh film --quality final
@@ -131,7 +137,7 @@ For manual fonts or offline models, see [fonts.md](skills/make-video/references/
 [audio.md](skills/make-video/references/audio.md).
 
 Render time depends on the number of frames, scene complexity, CPU, and worker count. Use
-`./make.sh preview` for iteration. Start with two workers; lower the count if memory is limited.
+`./make.sh studio` or `./make.sh preview` for iteration. Start with two workers; lower the count if memory is limited.
 Motion blur with `--blur 4` draws four subframes for each output frame.
 
 In one local check on arm64 macOS 26.5.2, project setup took 2.7 seconds with cached npm packages

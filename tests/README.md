@@ -3,6 +3,7 @@
 `python3 -m unittest discover -s tests -v` uses only the Python standard library. It checks input
 validation, missing and stale speech data, cue boundaries, caption generation, HTML escaping,
 composition variation, and saved music seeds.
+It checks word-timing matches, gaps, rejected lines, and measured cue and caption times.
 It also uses local command fixtures to check Gemini selection, spoken text, line caching,
 provider and voice changes, and failed or silent narration. These checks make no API requests.
 
@@ -17,6 +18,7 @@ initial network access as project setup. It does not download the speech model.
 
 The smoke check renders silent and recorded audio in landscape, portrait, and square formats.
 It checks dimensions, frame rate, duration, H.264/AAC streams, captions, and full-file decoding.
+It starts the studio and checks its page, frames, audio byte ranges, and reload after a scene edit.
 It also checks direct scene sampling from a fresh project, missing draw functions, bad flags,
 ffmpeg failures during encoding, contact sheets, and concatenation, and failed audio stages.
 Temporary paths include spaces and an apostrophe to check path handling.
